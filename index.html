@@ -359,7 +359,7 @@
   var prettyName = RockyDB.prettyName;
 
   function saveClipGroups(c) {
-    if (c.repo) RockyDB.setOverride(c.id, c.groups);
+    if (c.repo) RockyDB.setOverride(c.id, c.groups, c.repoGroups);
     else RockyDB.putClips([c]);
   }
 
@@ -373,7 +373,6 @@
   function savedClips(m) {
     if (!m || !Array.isArray(m.clips)) return [];
     (m.groups || []).forEach(groupIdForName);
-    var over = RockyDB.overrides();
     return m.clips.filter(function (c) { return c && c.file; }).map(function (c) {
       var id = "repo:" + c.file;
       return {
@@ -381,7 +380,8 @@
         name: c.name || prettyName(c.file),
         src: "clips/" + encodeURI(c.file),
         repo: true,
-        groups: over[id] || (c.groups || []).map(groupIdForName)
+        repoGroups: c.groups || [],
+        groups: RockyDB.savedGroups(id, c.groups, groupIdForName)
       };
     });
   }

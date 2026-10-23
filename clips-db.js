@@ -83,13 +83,23 @@ window.RockyDB = (function () {
   // "I mGladYouDidn tDie" and "I'm Glad You Didn't Die" both become "imgladyoudidntdie".
   function sameKey(name) { return String(name).toLowerCase().replace(/[^a-z0-9]+/g, ""); }
 
-  // Group changes to clips saved in the repo are remembered in this browser only.
+  // Group changes to clips saved in the repo are remembered in this browser only, along with the
+  // repo's groups for that clip at the time. Once the repo's groups for the clip change (someone saved
+  // groups to GitHub), the repo wins and the browser's change is dropped.
   var OVERRIDE_KEY = "rocky-saved-clip-groups";
+  function baseKey(repoGroups) { return JSON.stringify((repoGroups || []).slice().sort()); }
   function overrides() { try { return JSON.parse(localStorage.getItem(OVERRIDE_KEY) || "{}"); } catch (e) { return {}; } }
-  function setOverride(id, groups) {
+  function setOverride(id, groups, repoGroups) {
     var over = overrides();
-    over[id] = groups;
+    over[id] = { groups: groups, base: baseKey(repoGroups) };
     try { localStorage.setItem(OVERRIDE_KEY, JSON.stringify(over)); } catch (e) {}
+  }
+  // Group ids for a saved clip: this browser's change if it still applies, else the repo's group names
+  // mapped through toId.
+  function savedGroups(id, repoGroups, toId) {
+    var o = overrides()[id];
+    if (o && !Array.isArray(o) && o.base === baseKey(repoGroups)) return o.groups.slice();
+    return (repoGroups || []).map(toId);
   }
 
   // The repo's clips/clips.json, or null when there isn't one.
@@ -109,6 +119,7 @@ window.RockyDB = (function () {
     sameKey: sameKey,
     overrides: overrides,
     setOverride: setOverride,
+    savedGroups: savedGroups,
     saved: saved,
     deleteClips: function (ids) { return write("clips", ids.map(function (id) { return ["delete", id]; })); },
     clips: function () {

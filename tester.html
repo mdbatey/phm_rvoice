@@ -513,7 +513,7 @@
     }).then(function (r) {
       // Clips already on the board (saved in the repo, or in this browser) join the group instead of being
       // added again. Same matching as the board: case, spacing and punctuation don't matter.
-      var byKey = {}, over = RockyDB.overrides();
+      var byKey = {};
       function groupIdForName(n) {
         var k = String(n).trim().toLowerCase();
         var g = groups.filter(function (x) { return x.name.trim().toLowerCase() === k; })[0];
@@ -522,7 +522,7 @@
       ((r[1] && r[1].clips) || []).forEach(function (c) {
         if (!c || !c.file) return;
         var id = "repo:" + c.file;
-        byKey[RockyDB.sameKey(c.name || prettyName(c.file))] = { id: id, repo: true, groups: (over[id] || (c.groups || []).map(groupIdForName)).slice() };
+        byKey[RockyDB.sameKey(c.name || prettyName(c.file))] = { id: id, repo: true, repoGroups: c.groups || [], groups: RockyDB.savedGroups(id, c.groups, groupIdForName) };
       });
       r[0].forEach(function (c) {
         var k = RockyDB.sameKey(c.name);
@@ -535,7 +535,7 @@
         if (!group || c.fresh || c.groups.indexOf(group.id) !== -1) return;
         c.groups.push(group.id);
         joined++;
-        if (c.repo) RockyDB.setOverride(c.id, c.groups);
+        if (c.repo) RockyDB.setOverride(c.id, c.groups, c.repoGroups);
         else joinedLocal.push(c);
       });
       return Promise.all(fresh.map(blobFor)).then(function (blobs) {
