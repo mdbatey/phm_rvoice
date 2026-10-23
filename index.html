@@ -156,11 +156,17 @@
     z-index: 5;
     background: var(--bg);
     display: flex;
-    align-items: center;
-    gap: 14px;
+    flex-direction: column;
+    gap: 6px;
     padding-block: 6px;
     border-bottom: 1px solid var(--rule);
   }
+  .ctl-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .music-row { padding-bottom: 4px; }
+  .music-name { flex: 1 1 100%; min-width: 0; font: 500 13px/1.3 var(--font-display); overflow-wrap: anywhere; }
+  .music-name::before { content: "\266A  "; color: var(--accent); }
+  .controls .toggle { display: flex; align-items: center; gap: 6px; cursor: pointer; white-space: nowrap; }
+  .toggle input { accent-color: var(--accent); width: 18px; height: 18px; margin: 0; }
   body::before {
     content: "";
     position: fixed;
@@ -275,9 +281,18 @@
   </header>
 
   <div class="controls">
-    <label for="vol">Volume</label>
-    <input id="vol" type="range" min="0" max="100" value="70">
-    <span class="vol-n" id="vol-n" aria-hidden="true">70</span>
+    <div class="ctl-row">
+      <label for="vol">Volume</label>
+      <input id="vol" type="range" min="0" max="100" value="70">
+      <span class="vol-n" id="vol-n" aria-hidden="true">70</span>
+    </div>
+    <div class="ctl-row music-row" id="music-row" hidden>
+      <span class="music-name" id="music-name"></span>
+      <label for="mvol">Music</label>
+      <input id="mvol" type="range" min="0" max="100" value="60">
+      <label class="toggle" for="mloop"><input id="mloop" type="checkbox" checked> Loop</label>
+      <button type="button" class="gbtn" id="mstop">Stop</button>
+    </div>
   </div>
 
   <section class="mine" aria-labelledby="mine-h">
@@ -342,6 +357,7 @@
   volEl.addEventListener("input", function () {
     volN.textContent = volEl.value;
     if (clipAudio) clipAudio.volume = Math.min(1, volEl.value / 100);
+    if (musicAudio) { clearInterval(fadeTimer); musicAudio.volume = musicTarget(); }
     try { localStorage.setItem(VOL_KEY, volEl.value); } catch (e) {}
   });
 
@@ -420,22 +436,83 @@
     render();
   }
 
-  function stopClip() {
+  // keepDucked: another clip is about to start, so leave the music down.
+  function stopClip(keepDucked) {
     if (clipAudio) { clipAudio.pause(); clipAudio = null; }
     if (clipPad) { clipPad.classList.remove("playing"); clipPad = null; }
+    if (!keepDucked) setDucked(false);
   }
+
+  // ---- Background music: clips in the Music group play underneath the other clips. While a clip
+  // plays, the music fades down to DUCK of its level and comes back up when the clip ends. ----
+  var DUCK = 0.3, MVOL_KEY = "rocky-music-volume";
+  var musicAudio = null, musicPad = null, musicId = null, ducked = false, fadeTimer = null;
+  var mvol = $("mvol"), mloop = $("mloop");
+  try { var savedMvol = localStorage.getItem(MVOL_KEY); if (savedMvol !== null) mvol.value = savedMvol; } catch (e) {}
+
+  function isMusic(c) {
+    return c.groups.some(function (id) {
+      return groups.some(function (g) { return g.id === id && g.name.trim().toLowerCase() === "music"; });
+    });
+  }
+  function musicTarget() { return Math.min(1, (volEl.value / 100) * (mvol.value / 100) * (ducked ? DUCK : 1)); }
+  function fadeMusic() {
+    if (!musicAudio) return;
+    clearInterval(fadeTimer);
+    var a = musicAudio, from = a.volume, to = musicTarget(), n = 0, steps = 12;
+    fadeTimer = setInterval(function () {
+      n++;
+      a.volume = Math.max(0, Math.min(1, from + (to - from) * n / steps));
+      if (n >= steps) clearInterval(fadeTimer);
+    }, 25);
+  }
+  function setDucked(on) {
+    if (ducked === on) return;
+    ducked = on;
+    fadeMusic();
+  }
+  function stopMusic() {
+    clearInterval(fadeTimer);
+    if (musicAudio) { musicAudio.pause(); musicAudio = null; }
+    if (musicPad) musicPad.classList.remove("playing");
+    musicPad = null;
+    musicId = null;
+    $("music-row").hidden = true;
+  }
+  // Tapping the music that is playing stops it.
+  function playMusic(c, b) {
+    if (musicId === c.id) { stopMusic(); return; }
+    stopMusic();
+    if (!urls[c.id]) urls[c.id] = c.src || URL.createObjectURL(c.blob);
+    var a = new Audio(urls[c.id]);
+    a.loop = mloop.checked;
+    a.volume = musicTarget();
+    musicAudio = a; musicPad = b; musicId = c.id;
+    b.classList.add("playing");
+    $("music-name").textContent = c.name;
+    $("music-row").hidden = false;
+    a.onended = function () { if (musicAudio === a) stopMusic(); };
+    a.play().catch(function () { if (musicAudio === a) stopMusic(); });
+  }
+  mvol.addEventListener("input", function () {
+    if (musicAudio) { clearInterval(fadeTimer); musicAudio.volume = musicTarget(); }
+    try { localStorage.setItem(MVOL_KEY, mvol.value); } catch (e) {}
+  });
+  mloop.addEventListener("change", function () { if (musicAudio) musicAudio.loop = mloop.checked; });
+  $("mstop").addEventListener("click", stopMusic);
 
   // Tapping the clip that is playing stops it.
   function playClip(c, b) {
     if (clipAudio && clipPad === b) { stopClip(); return; }
-    stopClip();
+    stopClip(true);
     if (!urls[c.id]) urls[c.id] = c.src || URL.createObjectURL(c.blob);
     var a = new Audio(urls[c.id]);
     a.volume = Math.min(1, volEl.value / 100);
     clipAudio = a; clipPad = b;
     b.classList.add("playing");
+    setDucked(true);
     a.onended = function () { if (clipPad === b) stopClip(); };
-    a.play().catch(function () { stopClip(); });
+    a.play().catch(function () { if (clipPad === b) stopClip(); });
   }
 
   var PAD_INNER = '<span class="pad-top"><span class="pad-key"></span><span class="pad-groups"></span></span><span class="pad-text"></span><span class="pad-bars" aria-hidden="true"><i></i><i></i><i></i></span>';
@@ -489,10 +566,12 @@
     b.className = "pad";
     b.innerHTML = PAD_INNER;
     b.querySelector(".pad-text").textContent = c.name;
-    b.querySelector(".pad-key").textContent = c.repo ? "saved" : "this device";
+    var music = isMusic(c);
+    b.querySelector(".pad-key").textContent = music ? "music" : c.repo ? "saved" : "this device";
     showGroupTags(b, c);
-    b.setAttribute("aria-label", "Play clip: " + c.name);
-    b.addEventListener("click", function () { playClip(c, b); });
+    b.setAttribute("aria-label", (music ? "Play music: " : "Play clip: ") + c.name);
+    if (music && c.id === musicId) { b.classList.add("playing"); musicPad = b; }
+    b.addEventListener("click", function () { if (music) playMusic(c, b); else playClip(c, b); });
     return b;
   }
 
