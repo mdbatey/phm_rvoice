@@ -108,6 +108,21 @@
   .pad.playing { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
 
   .pad-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .pad-key { flex: none; }
+  .pad-groups { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; min-width: 0; }
+  .gtag {
+    font: 500 11px/1 var(--font-body);
+    padding: 3px 7px;
+    border-radius: 999px;
+    border: 1px solid currentColor;
+    opacity: 0.75;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .gtag.here { opacity: 1; background: var(--fg); border-color: var(--fg); color: var(--surface); }
+  .pad.playing .gtag.here { background: var(--on-accent); border-color: var(--on-accent); color: var(--accent); }
   .pad-key, .pad-count {
     font-family: var(--font-mono);
     font-size: 11px;
@@ -423,7 +438,20 @@
     a.play().catch(function () { stopClip(); });
   }
 
-  var PAD_INNER = '<span class="pad-top"><span class="pad-key"></span><span class="pad-count"></span></span><span class="pad-text"></span><span class="pad-bars" aria-hidden="true"><i></i><i></i><i></i></span>';
+  var PAD_INNER = '<span class="pad-top"><span class="pad-key"></span><span class="pad-groups"></span></span><span class="pad-text"></span><span class="pad-bars" aria-hidden="true"><i></i><i></i><i></i></span>';
+
+  // One small tag per group the clip is in, top right of the pad.
+  function showGroupTags(pad, c) {
+    var box = pad.querySelector(".pad-groups");
+    box.innerHTML = "";
+    groups.forEach(function (g) {
+      if (!inGroup(c, g)) return;
+      var t = document.createElement("span");
+      t.className = "gtag" + (g.id === active ? " here" : "");
+      t.textContent = g.name;
+      box.appendChild(t);
+    });
+  }
 
   // Choose clips: tap the top to hear the clip, the button underneath to add or remove it.
   function makePickPad(c, g) {
@@ -440,6 +468,7 @@
       toggle.setAttribute("aria-pressed", on ? "true" : "false");
       toggle.textContent = on ? "\u2713 In " + g.name : "+ Add to " + g.name;
       toggle.setAttribute("aria-label", (on ? "Remove " : "Add ") + c.name + (on ? " from " : " to ") + g.name);
+      showGroupTags(pad, c);
     }
     play.addEventListener("click", function () { playClip(c, pad); });
     toggle.addEventListener("click", function () {
@@ -461,6 +490,7 @@
     b.innerHTML = PAD_INNER;
     b.querySelector(".pad-text").textContent = c.name;
     b.querySelector(".pad-key").textContent = c.repo ? "saved" : "this device";
+    showGroupTags(b, c);
     b.setAttribute("aria-label", "Play clip: " + c.name);
     b.addEventListener("click", function () { playClip(c, b); });
     return b;
