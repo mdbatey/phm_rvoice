@@ -171,6 +171,9 @@
   .repo-out { display: flex; flex-direction: column; gap: 10px; }
   .steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; font-size: 14px; max-width: 56ch; }
   .steps code { font-family: var(--font-mono); font-size: 12px; overflow-wrap: anywhere; }
+  .manifest-box { display: flex; flex-direction: column; gap: 10px; }
+  .manifest-box summary { cursor: pointer; font-size: 14px; color: var(--muted); }
+  .manifest-box[open] > * + * { margin-top: 10px; }
   .manifest {
     width: 100%; min-width: 0; resize: vertical;
     font: 12px/1.5 var(--font-mono); color: var(--fg);
@@ -248,10 +251,14 @@
       <div class="status" id="repoStatus" role="status"></div>
       <div class="repo-out" id="repoOut" hidden>
         <ol class="steps" id="steps"></ol>
-        <textarea class="manifest" id="manifest" readonly rows="8" aria-label="clips.json contents"></textarea>
-        <div class="send-row">
-          <button type="button" class="btn ghost" id="copy">Copy clips.json</button>
-        </div>
+        <details class="manifest-box" id="manifestBox">
+          <summary>Show clips.json</summary>
+          <p class="note">The full list of every clip and its groups. It has to be the whole list, because uploading it replaces the one on GitHub.</p>
+          <textarea class="manifest" id="manifest" readonly rows="8" aria-label="clips.json contents"></textarea>
+          <div class="send-row">
+            <button type="button" class="btn ghost" id="copy">Copy clips.json</button>
+          </div>
+        </details>
       </div>
     </div>
     <p class="note">Keys: <kbd>Space</kbd> play or stop, <kbd>&darr;</kbd> <kbd>&uarr;</kbd> next and previous, <kbd>K</kbd> keep. Clips you add are saved in this browser's copy of the board, the same place as "Your clips".</p>
@@ -678,7 +685,12 @@
             files.map(function (it) { return "<code>" + esc(baseName(it.path)) + "</code>"; }).join(", ") + ".");
         }
         $("repoOut").hidden = false;
-        var msg = kept.length - clash.length + " clip" + (kept.length - clash.length === 1 ? "" : "s") + where + ", " + files.length + " new to the repo.";
+        // Without the zip, the text is what gets pasted into GitHub, so show it.
+        $("manifestBox").open = !zipping;
+        var msg = zipping
+          ? "rocky-upload.zip has only what's new: " + files.length + " audio file" + (files.length === 1 ? "" : "s") +
+            " and the updated clips.json" + (group ? ", with them in " + group : "") + "."
+          : kept.length - clash.length + " clip" + (kept.length - clash.length === 1 ? "" : "s") + where + ", " + files.length + " new to the repo.";
         if (clash.length) msg += " Skipped " + clash.length + " with the same file name as another kept clip: " + clash.join(", ") + ".";
         if (!zipping) { repoStatus.textContent = msg; return; }
         repoStatus.textContent = "Packing " + files.length + " files…";
