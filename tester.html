@@ -159,6 +159,7 @@
     font: 12px/1.5 var(--font-mono); color: var(--fg);
     background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 10px;
   }
+  .hint { margin: 0; font-size: 14px; color: var(--accent); max-width: 54ch; }
   kbd { font-family: var(--font-mono); font-size: 12px; border: 1px solid var(--rule); border-radius: 3px; padding: 0 4px; }
 
   @media (prefers-reduced-motion: reduce) { .drop { transition: none; } }
@@ -212,6 +213,7 @@
       <button type="button" class="btn ghost" id="unkeep" disabled>Clear kept</button>
       <a class="btn ghost" href="./">Open the board</a>
     </div>
+    <p class="hint" id="keepHint">Tap <b>Keep</b> on each clip you want first. Add kept clips turns on once at least one is kept.</p>
     <div class="status" id="sendStatus" role="status"></div>
     <p class="note">To set up several people, keep one person's clips, add them to that person's group, tap Clear kept, then pick the next set. A clip can be in more than one group.</p>
     <div class="repo">
@@ -336,6 +338,7 @@
     $("none").hidden = !items.length || shown.length > 0;
     $("bar").hidden = $("send").hidden = !items.length;
     $("add").disabled = $("unkeep").disabled = $("pack").disabled = keptN === 0;
+    $("keepHint").hidden = keptN > 0;
     $("add").textContent = keptN ? "Add " + keptN + " kept clip" + (keptN === 1 ? "" : "s") : "Add kept clips";
   }
 
