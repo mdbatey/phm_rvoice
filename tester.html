@@ -509,24 +509,43 @@
     }
     sendStatus.textContent = "Adding…";
     (group && destEl.value === "__new" ? RockyDB.putGroup(group) : Promise.resolve(true)).then(function () {
-      return RockyDB.clips();
-    }).then(function (existing) {
-      var byName = {};
-      existing.forEach(function (c) { byName[c.name] = c; });
-      var fresh = kept.filter(function (it) { return !byName[it.name]; });
-      // Clips already on the board just join the group instead of being added twice.
-      var joined = group ? kept.filter(function (it) {
-        var c = byName[it.name];
-        return c && c.groups.indexOf(group.id) === -1;
-      }).map(function (it) { var c = byName[it.name]; c.groups.push(group.id); return c; }) : [];
+      return Promise.all([RockyDB.clips(), RockyDB.saved()]);
+    }).then(function (r) {
+      // Clips already on the board (saved in the repo, or in this browser) join the group instead of being
+      // added again. Same matching as the board: case, spacing and punctuation don't matter.
+      var byKey = {}, over = RockyDB.overrides();
+      function groupIdForName(n) {
+        var k = String(n).trim().toLowerCase();
+        var g = groups.filter(function (x) { return x.name.trim().toLowerCase() === k; })[0];
+        return g ? g.id : "repo:" + String(n).trim();
+      }
+      ((r[1] && r[1].clips) || []).forEach(function (c) {
+        if (!c || !c.file) return;
+        var id = "repo:" + c.file;
+        byKey[RockyDB.sameKey(c.name || prettyName(c.file))] = { id: id, repo: true, groups: (over[id] || (c.groups || []).map(groupIdForName)).slice() };
+      });
+      r[0].forEach(function (c) {
+        var k = RockyDB.sameKey(c.name);
+        if (!byKey[k]) byKey[k] = c;
+      });
+      var fresh = [], joinedLocal = [], joined = 0;
+      kept.forEach(function (it) {
+        var k = RockyDB.sameKey(it.name), c = byKey[k];
+        if (!c) { fresh.push(it); byKey[k] = { fresh: true }; return; }
+        if (!group || c.fresh || c.groups.indexOf(group.id) !== -1) return;
+        c.groups.push(group.id);
+        joined++;
+        if (c.repo) RockyDB.setOverride(c.id, c.groups);
+        else joinedLocal.push(c);
+      });
       return Promise.all(fresh.map(blobFor)).then(function (blobs) {
         var base = Date.now();
         var added = fresh.map(function (it, n) {
           return { id: (base + n) + "-" + Math.random().toString(36).slice(2), name: it.name, blob: blobs[n], groups: group ? [group.id] : [] };
         });
-        return RockyDB.putClips(added.concat(joined)).then(function (ok) {
+        return RockyDB.putClips(added.concat(joinedLocal)).then(function (ok) {
           if (!ok) throw new Error("storage");
-          return { added: added.length, joined: joined.length, same: kept.length - added.length - joined.length };
+          return { added: added.length, joined: joined, same: kept.length - added.length - joined };
         });
       });
     }).then(function (r) {

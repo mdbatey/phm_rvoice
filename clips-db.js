@@ -79,12 +79,38 @@ window.RockyDB = (function () {
     return n + tags.map(function (t) { return " (" + t + ")"; }).join("");
   }
 
+  // Names that differ only in spacing, case or punctuation are the same clip:
+  // "I mGladYouDidn tDie" and "I'm Glad You Didn't Die" both become "imgladyoudidntdie".
+  function sameKey(name) { return String(name).toLowerCase().replace(/[^a-z0-9]+/g, ""); }
+
+  // Group changes to clips saved in the repo are remembered in this browser only.
+  var OVERRIDE_KEY = "rocky-saved-clip-groups";
+  function overrides() { try { return JSON.parse(localStorage.getItem(OVERRIDE_KEY) || "{}"); } catch (e) { return {}; } }
+  function setOverride(id, groups) {
+    var over = overrides();
+    over[id] = groups;
+    try { localStorage.setItem(OVERRIDE_KEY, JSON.stringify(over)); } catch (e) {}
+  }
+
+  // The repo's clips/clips.json, or null when there isn't one.
+  function saved() {
+    return fetch("clips/clips.json", { cache: "no-cache" })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (m) { return m && Array.isArray(m.clips) ? m : null; })
+      .catch(function () { return null; });
+  }
+
   function newId(prefix) { return prefix + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 
   return {
     open: open,
     newId: newId,
     prettyName: prettyName,
+    sameKey: sameKey,
+    overrides: overrides,
+    setOverride: setOverride,
+    saved: saved,
+    deleteClips: function (ids) { return write("clips", ids.map(function (id) { return ["delete", id]; })); },
     clips: function () {
       return all("clips").then(function (list) {
         list.forEach(function (c) { if (!c.groups) c.groups = []; });

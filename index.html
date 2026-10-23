@@ -278,6 +278,7 @@
     </div>
     <p class="note" id="mine-empty">Pick audio files saved on your phone or computer, and each one becomes a pad named after its file. Have a whole zip? Use Test a batch to listen through it and send the keepers here. Clips you add here stay in this browser. Clips saved in the repo's clips folder show up everywhere, marked saved.</p>
     <p class="note" id="group-empty" hidden></p>
+    <p class="note" id="dupe-note" role="status" hidden></p>
     <div class="grid" id="mygrid"></div>
   </section>
 
@@ -303,19 +304,16 @@
   var mygrid = $("mygrid"), filesEl = $("files"), clearEl = $("clear");
   var emptyEl = $("mine-empty"), groupEmptyEl = $("group-empty"), chipsEl = $("chips");
   var gform = $("gform"), gname = $("gname"), gbar = $("gbar"), gconfirm = $("gconfirm"), pickBtn = $("gpick");
-  var ACTIVE_KEY = "rocky-active-group", OVERRIDE_KEY = "rocky-saved-clip-groups";
+  var ACTIVE_KEY = "rocky-active-group";
   var clips = [], groups = [], active = "all", picking = false, formMode = null;
   var urls = {}, clipAudio = null, clipPad = null;
   try { active = localStorage.getItem(ACTIVE_KEY) || "all"; } catch (e) {}
 
   var prettyName = RockyDB.prettyName;
 
-  function loadOverrides() { try { return JSON.parse(localStorage.getItem(OVERRIDE_KEY) || "{}"); } catch (e) { return {}; } }
   function saveClipGroups(c) {
-    if (!c.repo) { RockyDB.putClips([c]); return; }
-    var over = loadOverrides();
-    over[c.id] = c.groups;
-    try { localStorage.setItem(OVERRIDE_KEY, JSON.stringify(over)); } catch (e) {}
+    if (c.repo) RockyDB.setOverride(c.id, c.groups);
+    else RockyDB.putClips([c]);
   }
 
   // Groups named in the repo match a group of the same name in this browser, or show as a saved group.
@@ -328,7 +326,7 @@
   function savedClips(m) {
     if (!m || !Array.isArray(m.clips)) return [];
     (m.groups || []).forEach(groupIdForName);
-    var over = loadOverrides();
+    var over = RockyDB.overrides();
     return m.clips.filter(function (c) { return c && c.file; }).map(function (c) {
       var id = "repo:" + c.file;
       return {
@@ -340,10 +338,28 @@
       };
     });
   }
-  function loadSaved() {
-    return fetch("clips/clips.json", { cache: "no-cache" })
-      .then(function (r) { return r.ok ? r.json() : null; })
-      .catch(function () { return null; });
+
+  // A browser copy of a clip that is saved in the repo (or a second browser copy) is a duplicate:
+  // its groups move to the clip that stays, and the copy is deleted from this browser.
+  function dropDuplicates(saved, local) {
+    var byKey = {}, gone = [];
+    saved.forEach(function (c) { byKey[RockyDB.sameKey(c.name)] = c; });
+    var keep = local.filter(function (c) {
+      var k = RockyDB.sameKey(c.name), stay = byKey[k];
+      if (!stay) { byKey[k] = c; return true; }
+      var moved = c.groups.filter(function (g) { return stay.groups.indexOf(g) === -1; });
+      if (moved.length) { stay.groups = stay.groups.concat(moved); saveClipGroups(stay); }
+      gone.push(c.id);
+      return false;
+    });
+    if (gone.length) {
+      RockyDB.deleteClips(gone);
+      var note = $("dupe-note");
+      note.textContent = "Removed " + gone.length + " duplicate cop" + (gone.length === 1 ? "y" : "ies") +
+        " from this browser. Their groups moved to the matching clips.";
+      note.hidden = false;
+    }
+    return keep;
   }
 
   function activeGroup() { return groups.filter(function (g) { return g.id === active; })[0] || null; }
@@ -528,14 +544,24 @@
     setActive("all");
   });
 
+  // A file matching a clip already on the board isn't added twice; it just joins the open group.
   filesEl.addEventListener("change", function () {
-    var added = Array.prototype.map.call(filesEl.files, function (f, i) {
-      return {
+    var byKey = {}, added = [];
+    clips.forEach(function (c) { byKey[RockyDB.sameKey(c.name)] = c; });
+    Array.prototype.forEach.call(filesEl.files, function (f, i) {
+      var name = prettyName(f.name), have = byKey[RockyDB.sameKey(name)];
+      if (have) {
+        if (active !== "all" && have.groups.indexOf(active) === -1) { have.groups.push(active); saveClipGroups(have); }
+        return;
+      }
+      var c = {
         id: (Date.now() + i) + "-" + Math.random().toString(36).slice(2),
-        name: prettyName(f.name),
+        name: name,
         blob: f,
         groups: active === "all" ? [] : [active]
       };
+      byKey[RockyDB.sameKey(name)] = c;
+      added.push(c);
     });
     clips = clips.concat(added);
     RockyDB.putClips(added);
@@ -551,9 +577,10 @@
   });
 
   render();
-  Promise.all([RockyDB.clips(), RockyDB.groups(), loadSaved()]).then(function (r) {
+  Promise.all([RockyDB.clips(), RockyDB.groups(), RockyDB.saved()]).then(function (r) {
     groups = r[1];
-    clips = savedClips(r[2]).concat(r[0]);
+    var saved = savedClips(r[2]);
+    clips = saved.concat(dropDuplicates(saved, r[0]));
     render();
   });
 })();
