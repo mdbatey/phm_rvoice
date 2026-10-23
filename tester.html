@@ -300,8 +300,11 @@
         items.push(it);
       });
       items.sort(function (a, b) { return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }); });
+      // With a single clip there is nothing to choose between, so keep it straight away.
+      if (items.length === 1 && !items[0].kept) { items[0].kept = true; saveKept(); }
       stop();
-      statusEl.textContent = found.length ? items.length + " clips loaded." : "No audio files found in that selection.";
+      statusEl.textContent = !found.length ? "No audio files found in that selection." :
+        items.length === 1 ? "1 clip loaded and kept. Pick a group below, then Add kept clips." : items.length + " clips loaded.";
       render();
     }).catch(function (err) {
       statusEl.textContent = "Couldn't read that file. " + (err && err.message ? err.message : "Try another zip.");
