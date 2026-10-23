@@ -151,6 +151,43 @@
   .toggle input { accent-color: var(--accent); width: 18px; height: 18px; }
   input[type="range"] { flex: 1 1 auto; min-width: 0; accent-color: var(--accent); height: 32px; }
 
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; }
+  .chip {
+    font: 500 14px/1 var(--font-body);
+    padding: 9px 13px;
+    border-radius: 999px;
+    border: 1px solid var(--rule);
+    background: transparent;
+    color: var(--fg);
+    cursor: pointer;
+  }
+  .chip[aria-pressed="true"] { background: var(--fg); border-color: var(--fg); color: var(--bg); }
+  .chip.add { color: var(--muted); border-style: dashed; }
+  .chip:focus-visible, .gbtn:focus-visible, .gform input:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .chip .n { font-family: var(--font-mono); font-size: 11px; opacity: 0.6; margin-left: 4px; font-variant-numeric: tabular-nums; }
+
+  .gbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .gbar .gname { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-right: auto; min-width: 0; overflow-wrap: anywhere; }
+  .gbtn {
+    font: 500 13px/1 var(--font-body);
+    padding: 8px 11px;
+    border-radius: 6px;
+    border: 1px solid var(--rule);
+    background: transparent;
+    color: var(--fg);
+    cursor: pointer;
+  }
+  .gbtn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+  .gform { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .gform input {
+    flex: 1 1 160px; min-width: 0;
+    font: 15px var(--font-body); color: var(--fg);
+    background: var(--surface); border: 1px solid var(--rule); border-radius: 6px;
+    padding: 8px 10px;
+  }
+  .pad.pick { opacity: 0.55; }
+  .pad.pick.picked { opacity: 1; border-color: var(--accent); box-shadow: inset 0 0 0 2px var(--accent); }
+
   .note { margin: 0; font-size: 13px; color: var(--muted); max-width: 52ch; }
   @media (prefers-reduced-motion: reduce) {
     .pad, .pad-bars i { transition: none; }
@@ -176,7 +213,25 @@
         <button type="button" class="btn ghost" id="clear" hidden>Clear</button>
       </div>
     </div>
+    <div class="chips" id="chips" role="group" aria-label="Clip groups"></div>
+    <form class="gform" id="gform" hidden>
+      <input id="gname" type="text" maxlength="40" aria-label="Group name" autocomplete="off">
+      <button type="submit" class="gbtn primary" id="gsave">Save</button>
+      <button type="button" class="gbtn" id="gcancel">Cancel</button>
+    </form>
+    <div class="gbar" id="gbar" hidden>
+      <span class="gname" id="gtitle"></span>
+      <button type="button" class="gbtn" id="gpick">Choose clips</button>
+      <button type="button" class="gbtn" id="grename">Rename</button>
+      <button type="button" class="gbtn" id="gdelete">Delete</button>
+    </div>
+    <div class="gbar" id="gconfirm" hidden>
+      <span class="gname" id="gconfirm-text"></span>
+      <button type="button" class="gbtn primary" id="gdelete-yes">Delete group</button>
+      <button type="button" class="gbtn" id="gdelete-no">Cancel</button>
+    </div>
     <p class="note" id="mine-empty">Pick audio files saved on your phone or computer, and each one becomes a pad named after its file. Have a whole zip? Use Test a batch to listen through it and send the keepers here. Clips stay in this browser only and are never added to the page itself.</p>
+    <p class="note" id="group-empty" hidden></p>
     <div class="grid" id="mygrid"></div>
   </section>
 
@@ -189,6 +244,7 @@
   <p class="note">These sounds are made from scratch in your browser as simple synthesized chords. They are an approximation of the idea, not recordings from the book or audiobook. Keys 1 to 9 and 0 also play the pads.</p>
 </div>
 
+<script src="clips-db.js"></script>
 <script>
 (function () {
   // Chord shapes as frequency ratios over a root note.
@@ -349,42 +405,29 @@
     grid.appendChild(b);
   });
 
-  // ---- User's own clips: kept in this browser's IndexedDB, never published ----
-  var mygrid = document.getElementById("mygrid");
-  var filesEl = document.getElementById("files");
-  var clearEl = document.getElementById("clear");
-  var emptyEl = document.getElementById("mine-empty");
-  var clipAudio = null, clipPad = null, db = null;
-
-  function openDb() {
-    return new Promise(function (res) {
-      try {
-        var req = indexedDB.open("rocky-board", 1);
-        req.onupgradeneeded = function () { req.result.createObjectStore("clips", { keyPath: "id" }); };
-        req.onsuccess = function () { db = req.result; res(db); };
-        req.onerror = function () { res(null); };
-      } catch (e) { res(null); }
-    });
-  }
-  function allClips() {
-    return new Promise(function (res) {
-      if (!db) return res([]);
-      try {
-        var r = db.transaction("clips").objectStore("clips").getAll();
-        r.onsuccess = function () { res(r.result || []); };
-        r.onerror = function () { res([]); };
-      } catch (e) { res([]); }
-    });
-  }
-  function putClip(c) {
-    try { if (db) db.transaction("clips", "readwrite").objectStore("clips").put(c); } catch (e) {}
-  }
-  function clearClips() {
-    try { if (db) db.transaction("clips", "readwrite").objectStore("clips").clear(); } catch (e) {}
-  }
+  // ---- User's own clips and groups: kept in this browser's IndexedDB (clips-db.js), never published ----
+  function $(id) { return document.getElementById(id); }
+  var mygrid = $("mygrid"), filesEl = $("files"), clearEl = $("clear");
+  var emptyEl = $("mine-empty"), groupEmptyEl = $("group-empty"), chipsEl = $("chips");
+  var gform = $("gform"), gname = $("gname"), gbar = $("gbar"), gconfirm = $("gconfirm"), pickBtn = $("gpick");
+  var ACTIVE_KEY = "rocky-active-group";
+  var clips = [], groups = [], active = "all", picking = false, formMode = null;
+  var urls = {}, clipAudio = null, clipPad = null;
+  try { active = localStorage.getItem(ACTIVE_KEY) || "all"; } catch (e) {}
 
   function prettyName(n) {
     return n.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
+  }
+
+  function activeGroup() { return groups.filter(function (g) { return g.id === active; })[0] || null; }
+  function inGroup(c, g) { return c.groups.indexOf(g.id) !== -1; }
+
+  function setActive(id) {
+    active = id;
+    picking = false;
+    try { localStorage.setItem(ACTIVE_KEY, id); } catch (e) {}
+    hideForms();
+    render();
   }
 
   function stopClip() {
@@ -392,49 +435,176 @@
     if (clipPad) { clipPad.classList.remove("playing"); clipPad = null; }
   }
 
-  function addPad(clip) {
-    var url = URL.createObjectURL(clip.blob);
+  function playClip(c, b) {
+    stopCurrent();
+    stopClip();
+    if (!urls[c.id]) urls[c.id] = URL.createObjectURL(c.blob);
+    var a = new Audio(urls[c.id]);
+    a.volume = Math.min(1, volEl.value / 100);
+    clipAudio = a; clipPad = b;
+    b.classList.add("playing");
+    a.onended = function () { if (clipPad === b) stopClip(); };
+    a.play().catch(function () { stopClip(); });
+  }
+
+  function makePad(c, g) {
     var b = document.createElement("button");
     b.type = "button";
     b.className = "pad";
-    b.innerHTML = '<span class="pad-top"><span class="pad-key">clip</span><span class="pad-count"></span></span><span class="pad-text"></span><span class="pad-bars" aria-hidden="true"><i></i><i></i><i></i></span>';
-    b.querySelector(".pad-text").textContent = clip.name;
-    b.setAttribute("aria-label", "Play clip: " + clip.name);
-    b.addEventListener("click", function () {
-      stopCurrent();
-      if (canSpeak) window.speechSynthesis.cancel();
-      stopClip();
-      var a = new Audio(url);
-      a.volume = Math.min(1, volEl.value / 100);
-      clipAudio = a; clipPad = b;
-      b.classList.add("playing");
-      a.onended = function () { if (clipPad === b) stopClip(); };
-      a.play().catch(function () { stopClip(); });
-    });
-    mygrid.appendChild(b);
-    emptyEl.hidden = true;
-    clearEl.hidden = false;
+    b.innerHTML = '<span class="pad-top"><span class="pad-key"></span><span class="pad-count"></span></span><span class="pad-text"></span><span class="pad-bars" aria-hidden="true"><i></i><i></i><i></i></span>';
+    b.querySelector(".pad-text").textContent = c.name;
+    if (picking && g) {
+      var on = inGroup(c, g);
+      b.classList.add("pick");
+      if (on) b.classList.add("picked");
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+      b.setAttribute("aria-label", c.name + (on ? ", in " : ", not in ") + g.name);
+      b.querySelector(".pad-key").textContent = on ? "in group" : "tap to add";
+      b.addEventListener("click", function () {
+        if (inGroup(c, g)) c.groups = c.groups.filter(function (id) { return id !== g.id; });
+        else c.groups.push(g.id);
+        RockyDB.putClips([c]);
+        render();
+      });
+    } else {
+      b.querySelector(".pad-key").textContent = "clip";
+      b.setAttribute("aria-label", "Play clip: " + c.name);
+      b.addEventListener("click", function () { playClip(c, b); });
+    }
+    return b;
   }
 
-  filesEl.addEventListener("change", function () {
-    Array.prototype.forEach.call(filesEl.files, function (f) {
-      var clip = { id: Date.now() + "-" + Math.random().toString(36).slice(2), name: prettyName(f.name), blob: f };
-      putClip(clip);
-      addPad(clip);
+  function chip(label, pressed, n, onClick, cls) {
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "chip" + (cls ? " " + cls : "");
+    if (pressed !== null) b.setAttribute("aria-pressed", pressed ? "true" : "false");
+    b.textContent = label;
+    if (n !== null) {
+      var s = document.createElement("span");
+      s.className = "n";
+      s.textContent = n;
+      b.appendChild(s);
+    }
+    b.addEventListener("click", onClick);
+    chipsEl.appendChild(b);
+  }
+
+  function render() {
+    stopClip();
+    if (active !== "all" && !activeGroup()) active = "all";
+    var g = activeGroup();
+
+    chipsEl.innerHTML = "";
+    chip("All clips", active === "all", clips.length, function () { setActive("all"); });
+    groups.forEach(function (gr) {
+      var n = clips.filter(function (c) { return inGroup(c, gr); }).length;
+      chip(gr.name, active === gr.id, n, function () { setActive(gr.id); });
     });
+    chip("+ New group", null, null, function () { showForm("new"); }, "add");
+
+    gbar.hidden = !g || formMode !== null || !gconfirm.hidden;
+    if (g) {
+      $("gtitle").textContent = picking ? "Tap clips to add or remove" : g.name;
+      pickBtn.textContent = picking ? "Done" : "Choose clips";
+      pickBtn.classList.toggle("primary", picking);
+      pickBtn.hidden = !clips.length;
+      $("grename").hidden = $("gdelete").hidden = picking;
+    }
+
+    var list = g && !picking ? clips.filter(function (c) { return inGroup(c, g); }) : clips;
+    mygrid.innerHTML = "";
+    list.forEach(function (c) { mygrid.appendChild(makePad(c, g)); });
+
+    emptyEl.hidden = clips.length > 0;
+    groupEmptyEl.hidden = !(g && clips.length && !list.length);
+    if (g) groupEmptyEl.textContent = "No clips in " + g.name + " yet. Tap Choose clips to pick from your clips, or Add clips to add new files straight into this group.";
+    clearEl.hidden = !(active === "all" && clips.length);
+  }
+
+  function hideForms() {
+    formMode = null;
+    gform.hidden = true;
+    gconfirm.hidden = true;
+  }
+
+  function showForm(mode) {
+    hideForms();
+    picking = false;
+    formMode = mode;
+    gform.hidden = false;
+    $("gsave").textContent = mode === "new" ? "Create" : "Save";
+    gname.value = mode === "rename" ? activeGroup().name : "Person " + (groups.length + 1);
+    render();
+    gname.focus();
+    gname.select();
+  }
+
+  gform.addEventListener("submit", function (e) {
+    e.preventDefault();
+    var name = gname.value.trim();
+    if (!name) { gname.focus(); return; }
+    if (formMode === "new") {
+      var g = { id: RockyDB.newId("g"), name: name };
+      groups.push(g);
+      RockyDB.putGroup(g);
+      setActive(g.id);
+      picking = clips.length > 0;
+      render();
+    } else {
+      var cur = activeGroup();
+      cur.name = name;
+      RockyDB.putGroup(cur);
+      hideForms();
+      render();
+    }
+  });
+  $("gcancel").addEventListener("click", function () { hideForms(); render(); });
+
+  pickBtn.addEventListener("click", function () { picking = !picking; render(); });
+  $("grename").addEventListener("click", function () { showForm("rename"); });
+  $("gdelete").addEventListener("click", function () {
+    $("gconfirm-text").textContent = "Delete " + activeGroup().name + "? Its clips stay in All clips.";
+    gconfirm.hidden = false;
+    render();
+  });
+  $("gdelete-no").addEventListener("click", function () { hideForms(); render(); });
+  $("gdelete-yes").addEventListener("click", function () {
+    var id = active;
+    groups = groups.filter(function (g) { return g.id !== id; });
+    clips.forEach(function (c) { c.groups = c.groups.filter(function (x) { return x !== id; }); });
+    RockyDB.deleteGroup(id);
+    setActive("all");
+  });
+
+  filesEl.addEventListener("change", function () {
+    var added = Array.prototype.map.call(filesEl.files, function (f, i) {
+      return {
+        id: (Date.now() + i) + "-" + Math.random().toString(36).slice(2),
+        name: prettyName(f.name),
+        blob: f,
+        groups: active === "all" ? [] : [active]
+      };
+    });
+    clips = clips.concat(added);
+    RockyDB.putClips(added);
     filesEl.value = "";
+    render();
   });
 
   clearEl.addEventListener("click", function () {
-    stopClip();
-    clearClips();
-    mygrid.innerHTML = "";
-    emptyEl.hidden = false;
-    clearEl.hidden = true;
+    clips = [];
+    Object.keys(urls).forEach(function (k) { URL.revokeObjectURL(urls[k]); });
+    urls = {};
+    RockyDB.clearClips();
+    render();
   });
 
-  openDb().then(allClips).then(function (list) {
-    list.sort(function (a, b) { return a.id < b.id ? -1 : 1; }).forEach(addPad);
+  render();
+  Promise.all([RockyDB.clips(), RockyDB.groups()]).then(function (r) {
+    clips = r[0];
+    groups = r[1];
+    render();
   });
 
   document.addEventListener("keydown", function (e) {

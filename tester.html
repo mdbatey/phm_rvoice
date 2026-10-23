@@ -192,15 +192,25 @@
   <section class="send" id="send" hidden>
     <h2>Send to the board</h2>
     <div class="send-row">
+      <label class="small" for="dest">Add to</label>
+      <select class="search" id="dest"></select>
+    </div>
+    <div class="send-row" id="newRow" hidden>
+      <input class="search" id="newName" type="text" maxlength="40" placeholder="Group name, like Person 1" aria-label="New group name" autocomplete="off">
+    </div>
+    <div class="send-row">
       <button type="button" class="btn" id="add" disabled>Add kept clips</button>
+      <button type="button" class="btn ghost" id="unkeep" disabled>Clear kept</button>
       <a class="btn ghost" href="./">Open the board</a>
     </div>
     <div class="status" id="sendStatus" role="status"></div>
+    <p class="note">To set up several people, keep one person's clips, add them to that person's group, tap Clear kept, then pick the next set. A clip can be in more than one group.</p>
     <p class="note">Keys: <kbd>Space</kbd> play or stop, <kbd>&darr;</kbd> <kbd>&uarr;</kbd> next and previous, <kbd>K</kbd> keep. Clips you add are saved in this browser's copy of the board, the same place as "Your clips".</p>
   </section>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="clips-db.js"></script>
 <script>
 (function () {
   var AUDIO_RE = /\.(mp3|m4a|aac|wav|ogg|oga|opus|flac|webm)$/i;
@@ -303,7 +313,7 @@
     $("count").textContent = shown.length + " / " + items.length + " · " + keptN + " kept";
     $("none").hidden = !items.length || shown.length > 0;
     $("bar").hidden = $("send").hidden = !items.length;
-    $("add").disabled = keptN === 0;
+    $("add").disabled = $("unkeep").disabled = keptN === 0;
     $("add").textContent = keptN ? "Add " + keptN + " kept clip" + (keptN === 1 ? "" : "s") : "Add kept clips";
   }
 
@@ -425,50 +435,91 @@
     else if (e.key === "k" || e.key === "K") { if (cur !== -1) toggleKeep(cur); }
   });
 
-  // ---- Send kept clips into the board's own store (same IndexedDB the board reads "Your clips" from) ----
-  function openDb() {
-    return new Promise(function (res, rej) {
-      try {
-        var req = indexedDB.open("rocky-board", 1);
-        req.onupgradeneeded = function () { req.result.createObjectStore("clips", { keyPath: "id" }); };
-        req.onsuccess = function () { res(req.result); };
-        req.onerror = function () { rej(req.error); };
-      } catch (e) { rej(e); }
+  // ---- Send kept clips into the board's own store (clips-db.js, the same place the board reads "Your clips" from) ----
+  var DEST_KEY = "rocky-tester-dest";
+  var destEl = $("dest"), newRow = $("newRow"), newName = $("newName");
+  var groups = [];
+
+  function fillDest(selectId) {
+    var want = selectId;
+    if (want === undefined) { try { want = localStorage.getItem(DEST_KEY) || ""; } catch (e) { want = ""; } }
+    destEl.innerHTML = "";
+    var opts = [["", "Your clips, no group"]].concat(groups.map(function (g) { return [g.id, g.name]; }), [["__new", "New group…"]]);
+    opts.forEach(function (o) {
+      var op = document.createElement("option");
+      op.value = o[0];
+      op.textContent = o[1];
+      destEl.appendChild(op);
     });
+    destEl.value = opts.some(function (o) { return o[0] === want; }) ? want : "";
+    newRow.hidden = destEl.value !== "__new";
   }
+  destEl.addEventListener("change", function () {
+    newRow.hidden = destEl.value !== "__new";
+    if (!newRow.hidden) {
+      newName.value = "Person " + (groups.length + 1);
+      newName.focus();
+      newName.select();
+    }
+    try { localStorage.setItem(DEST_KEY, destEl.value === "__new" ? "" : destEl.value); } catch (e) {}
+  });
+  RockyDB.groups().then(function (g) { groups = g; fillDest(); });
+
+  $("unkeep").addEventListener("click", function () {
+    items.forEach(function (it) { it.kept = false; });
+    saveKept();
+    $("sendStatus").textContent = "";
+    render();
+    markRows();
+  });
 
   $("add").addEventListener("click", function () {
     var sendStatus = $("sendStatus");
     var kept = items.filter(function (it) { return it.kept; });
     if (!kept.length) return;
+    var group = null;
+    if (destEl.value === "__new") {
+      var name = newName.value.trim();
+      if (!name) { sendStatus.textContent = "Type a name for the new group first."; newName.focus(); return; }
+      group = { id: RockyDB.newId("g"), name: name };
+    } else if (destEl.value) {
+      group = groups.filter(function (g) { return g.id === destEl.value; })[0] || null;
+    }
     sendStatus.textContent = "Adding…";
-    var db;
-    openDb().then(function (d) {
-      db = d;
-      return new Promise(function (res) {
-        var r = db.transaction("clips").objectStore("clips").getAll();
-        r.onsuccess = function () { res(r.result || []); };
-        r.onerror = function () { res([]); };
-      });
+    (group && destEl.value === "__new" ? RockyDB.putGroup(group) : Promise.resolve(true)).then(function () {
+      return RockyDB.clips();
     }).then(function (existing) {
-      var names = {};
-      existing.forEach(function (c) { names[c.name] = true; });
-      var todo = kept.filter(function (it) { return !names[it.name]; });
-      return Promise.all(todo.map(blobFor)).then(function (blobs) {
-        return new Promise(function (res, rej) {
-          var tx = db.transaction("clips", "readwrite");
-          var store = tx.objectStore("clips");
-          var base = Date.now();
-          todo.forEach(function (it, n) {
-            store.put({ id: (base + n) + "-" + Math.random().toString(36).slice(2), name: it.name, blob: blobs[n] });
-          });
-          tx.oncomplete = function () { res({ added: todo.length, skipped: kept.length - todo.length }); };
-          tx.onerror = function () { rej(tx.error); };
+      var byName = {};
+      existing.forEach(function (c) { byName[c.name] = c; });
+      var fresh = kept.filter(function (it) { return !byName[it.name]; });
+      // Clips already on the board just join the group instead of being added twice.
+      var joined = group ? kept.filter(function (it) {
+        var c = byName[it.name];
+        return c && c.groups.indexOf(group.id) === -1;
+      }).map(function (it) { var c = byName[it.name]; c.groups.push(group.id); return c; }) : [];
+      return Promise.all(fresh.map(blobFor)).then(function (blobs) {
+        var base = Date.now();
+        var added = fresh.map(function (it, n) {
+          return { id: (base + n) + "-" + Math.random().toString(36).slice(2), name: it.name, blob: blobs[n], groups: group ? [group.id] : [] };
+        });
+        return RockyDB.putClips(added.concat(joined)).then(function (ok) {
+          if (!ok) throw new Error("storage");
+          return { added: added.length, joined: joined.length, same: kept.length - added.length - joined.length };
         });
       });
     }).then(function (r) {
-      sendStatus.textContent = "Added " + r.added + " clip" + (r.added === 1 ? "" : "s") + " to the board" +
-        (r.skipped ? " (" + r.skipped + " already there)" : "") + ".";
+      if (group && destEl.value === "__new") {
+        groups.push(group);
+        fillDest(group.id);
+        try { localStorage.setItem(DEST_KEY, group.id); } catch (e) {}
+      }
+      var where = group ? group.name : "the board";
+      var parts = [];
+      if (r.added) parts.push("added " + r.added + " new clip" + (r.added === 1 ? "" : "s"));
+      if (r.joined) parts.push("put " + r.joined + " clip" + (r.joined === 1 ? "" : "s") + " already on the board into it");
+      var msg = parts.length ? where + ": " + parts.join(", ") + "." : "Nothing new. Those clips are already in " + where + ".";
+      if (parts.length && r.same) msg += " " + r.same + " were already there.";
+      sendStatus.textContent = msg.charAt(0).toUpperCase() + msg.slice(1);
     }).catch(function () {
       sendStatus.textContent = "Couldn't save to the board. This browser may be blocking site storage, for example in a private window.";
     });
