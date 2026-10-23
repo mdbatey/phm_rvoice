@@ -3,7 +3,8 @@
     "Rocky",
     "Grace",
     "Mary",
-    "Eva"
+    "Eva",
+    "Music"
   ],
   "clips": [
     {
@@ -422,7 +423,9 @@
     {
       "file": "Music-AmazeAmazeAmaze.mp3",
       "name": "Music Amaze Amaze Amaze",
-      "groups": []
+      "groups": [
+        "Music"
+      ]
     },
     {
       "file": "NoDoPuppetShow.mp3",
