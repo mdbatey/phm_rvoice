@@ -208,8 +208,25 @@
     background: var(--surface); border: 1px solid var(--rule); border-radius: 6px;
     padding: 8px 10px;
   }
-  .pad.pick { opacity: 0.55; }
-  .pad.pick.picked { opacity: 1; border-color: var(--accent); box-shadow: inset 0 0 0 2px var(--accent); }
+  /* Choose clips: the top of the pad previews the clip, the button underneath adds or removes it. */
+  .pad.pick { cursor: default; padding: 0; gap: 0; overflow: hidden; }
+  .pad.pick:active { transform: none; }
+  .pad.pick.picked { border-color: var(--accent); box-shadow: inset 0 0 0 2px var(--accent); }
+  .pick-play {
+    appearance: none; border: 0; background: transparent; color: inherit; font: inherit; text-align: left;
+    padding: 14px 14px 10px; flex: 1 1 auto;
+    display: flex; flex-direction: column; justify-content: space-between; gap: 12px;
+    cursor: pointer;
+  }
+  .pick-toggle {
+    appearance: none; font: 500 13px/1 var(--font-body);
+    border: 0; border-top: 1px solid var(--rule);
+    background: transparent; color: var(--fg);
+    padding: 11px 14px; text-align: left; cursor: pointer;
+  }
+  .pad.playing .pick-toggle { color: var(--on-accent); border-top-color: currentColor; }
+  .pick-toggle[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); border-top-color: var(--accent); }
+  .pick-play:focus-visible, .pick-toggle:focus-visible { outline: 3px solid var(--accent); outline-offset: -3px; }
 
   .note { margin: 0; font-size: 13px; color: var(--muted); max-width: 52ch; }
   @media (prefers-reduced-motion: reduce) {
@@ -345,7 +362,9 @@
     if (clipPad) { clipPad.classList.remove("playing"); clipPad = null; }
   }
 
+  // Tapping the clip that is playing stops it.
   function playClip(c, b) {
+    if (clipAudio && clipPad === b) { stopClip(); return; }
     stopClip();
     if (!urls[c.id]) urls[c.id] = c.src || URL.createObjectURL(c.blob);
     var a = new Audio(urls[c.id]);
@@ -356,30 +375,46 @@
     a.play().catch(function () { stopClip(); });
   }
 
+  var PAD_INNER = '<span class="pad-top"><span class="pad-key"></span><span class="pad-count"></span></span><span class="pad-text"></span><span class="pad-bars" aria-hidden="true"><i></i><i></i><i></i></span>';
+
+  // Choose clips: tap the top to hear the clip, the button underneath to add or remove it.
+  function makePickPad(c, g) {
+    var pad = document.createElement("div");
+    pad.className = "pad pick";
+    pad.innerHTML = '<button type="button" class="pick-play">' + PAD_INNER + '</button><button type="button" class="pick-toggle"></button>';
+    var play = pad.querySelector(".pick-play"), toggle = pad.querySelector(".pick-toggle");
+    pad.querySelector(".pad-text").textContent = c.name;
+    pad.querySelector(".pad-key").textContent = "tap to hear";
+    play.setAttribute("aria-label", "Hear " + c.name);
+    function show() {
+      var on = inGroup(c, g);
+      pad.classList.toggle("picked", on);
+      toggle.setAttribute("aria-pressed", on ? "true" : "false");
+      toggle.textContent = on ? "\u2713 In " + g.name : "+ Add to " + g.name;
+      toggle.setAttribute("aria-label", (on ? "Remove " : "Add ") + c.name + (on ? " from " : " to ") + g.name);
+    }
+    play.addEventListener("click", function () { playClip(c, pad); });
+    toggle.addEventListener("click", function () {
+      if (inGroup(c, g)) c.groups = c.groups.filter(function (id) { return id !== g.id; });
+      else c.groups.push(g.id);
+      saveClipGroups(c);
+      show();
+      renderChips();
+    });
+    show();
+    return pad;
+  }
+
   function makePad(c, g) {
+    if (picking && g) return makePickPad(c, g);
     var b = document.createElement("button");
     b.type = "button";
     b.className = "pad";
-    b.innerHTML = '<span class="pad-top"><span class="pad-key"></span><span class="pad-count"></span></span><span class="pad-text"></span><span class="pad-bars" aria-hidden="true"><i></i><i></i><i></i></span>';
+    b.innerHTML = PAD_INNER;
     b.querySelector(".pad-text").textContent = c.name;
-    if (picking && g) {
-      var on = inGroup(c, g);
-      b.classList.add("pick");
-      if (on) b.classList.add("picked");
-      b.setAttribute("aria-pressed", on ? "true" : "false");
-      b.setAttribute("aria-label", c.name + (on ? ", in " : ", not in ") + g.name);
-      b.querySelector(".pad-key").textContent = on ? "in group" : "tap to add";
-      b.addEventListener("click", function () {
-        if (inGroup(c, g)) c.groups = c.groups.filter(function (id) { return id !== g.id; });
-        else c.groups.push(g.id);
-        saveClipGroups(c);
-        render();
-      });
-    } else {
-      b.querySelector(".pad-key").textContent = c.repo ? "saved" : "this device";
-      b.setAttribute("aria-label", "Play clip: " + c.name);
-      b.addEventListener("click", function () { playClip(c, b); });
-    }
+    b.querySelector(".pad-key").textContent = c.repo ? "saved" : "this device";
+    b.setAttribute("aria-label", "Play clip: " + c.name);
+    b.addEventListener("click", function () { playClip(c, b); });
     return b;
   }
 
@@ -399,11 +434,7 @@
     chipsEl.appendChild(b);
   }
 
-  function render() {
-    stopClip();
-    if (active !== "all" && !activeGroup()) active = "all";
-    var g = activeGroup();
-
+  function renderChips() {
     chipsEl.innerHTML = "";
     chip("All clips", active === "all", clips.length, function () { setActive("all"); });
     groups.forEach(function (gr) {
@@ -411,10 +442,17 @@
       chip(gr.name, active === gr.id, n, function () { setActive(gr.id); });
     });
     chip("+ New group", null, null, function () { showForm("new"); }, "add");
+  }
+
+  function render() {
+    stopClip();
+    if (active !== "all" && !activeGroup()) active = "all";
+    var g = activeGroup();
+    renderChips();
 
     gbar.hidden = !g || formMode !== null || !gconfirm.hidden;
     if (g) {
-      $("gtitle").textContent = picking ? "Tap clips to add or remove" : g.name + (g.repo ? " · saved in repo" : "");
+      $("gtitle").textContent = picking ? "Tap a clip to hear it, then add it" : g.name + (g.repo ? " · saved in repo" : "");
       pickBtn.textContent = picking ? "Done" : "Choose clips";
       pickBtn.classList.toggle("primary", picking);
       pickBtn.hidden = !clips.length;
