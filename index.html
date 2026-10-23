@@ -285,6 +285,13 @@
   .ghpanel-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
   .ghpanel h3 { font-family: var(--font-display); font-weight: 500; font-size: 15px; margin: 0; }
   .ghrow { display: flex; gap: 8px; flex-wrap: wrap; }
+  .ghchanges { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
+  .ghchanges:empty { display: none; }
+  #ghsave { display: flex; flex-direction: column; gap: 10px; }
+  #ghsave[hidden] { display: none; }
+  .ghfile summary { cursor: pointer; font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+  .ghfile[open] { display: flex; flex-direction: column; gap: 8px; }
+  .ghfile .gbtn { align-self: flex-start; }
   a.gbtn { text-decoration: none; display: inline-block; }
   .steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; font-size: 14px; max-width: 56ch; }
   .manifest {
@@ -338,14 +345,20 @@
         <h3>Save groups</h3>
         <button type="button" class="gbtn" id="ghclose">Close</button>
       </div>
-      <ol class="steps" id="ghsteps"></ol>
-      <textarea class="manifest" id="ghjson" readonly rows="8" aria-label="New clips.json"></textarea>
-      <div class="ghrow">
-        <button type="button" class="gbtn primary" id="ghcopy">Copy clips.json</button>
-        <button type="button" class="gbtn" id="ghdl" hidden>Download clips.json</button>
-        <a class="gbtn" id="ghedit" target="_blank" rel="noopener">Open clips.json on GitHub</a>
-      </div>
       <p class="note" id="ghstatus" role="status"></p>
+      <ul class="ghchanges" id="ghchanges"></ul>
+      <div id="ghsave" hidden>
+        <ol class="steps" id="ghsteps"></ol>
+        <div class="ghrow">
+          <a class="gbtn primary" id="ghcommit" target="_blank" rel="noopener">Commit on GitHub</a>
+          <button type="button" class="gbtn" id="ghdl" hidden>Download</button>
+        </div>
+        <details class="ghfile">
+          <summary id="ghfilename"></summary>
+          <textarea class="manifest" id="ghjson" readonly rows="8" aria-label="Changes file"></textarea>
+          <button type="button" class="gbtn" id="ghcopy">Copy</button>
+        </details>
+      </div>
     </div>
     <form class="gform" id="gform" hidden>
       <input id="gname" type="text" maxlength="40" aria-label="Group name" autocomplete="off">
@@ -838,51 +851,95 @@
     $("ghopen2").hidden = picking || reordering || !$("ghpanel").hidden;
   }
 
-  // ---- Save groups: the repo's clips.json with each saved clip's groups as they are on this board ----
+  // ---- Save groups: write a small change file holding only what differs from GitHub (clips that moved
+  // between groups, groups whose order changed, and the group list if groups were added, renamed or
+  // deleted). The board applies change files on top of clips.json; see RockyDB.saved. ----
   var REPO = "mdbatey/phm_rvoice";
   var gh = location.hostname.match(/^([^.]+)\.github\.io$/), ghPath = location.pathname.split("/")[1];
   if (gh && ghPath) REPO = gh[1] + "/" + ghPath;
   var CAN_DOWNLOAD = !!gh || /^localhost$|^127\./.test(location.hostname) || location.protocol === "file:";
-  $("ghedit").href = "https://github.com/" + REPO + "/edit/main/clips/clips.json";
+  var ghFile = "";
 
   function ghStep(html) { var li = document.createElement("li"); li.innerHTML = html; $("ghsteps").appendChild(li); }
+  function ghLine(text) { var li = document.createElement("li"); li.textContent = text; $("ghchanges").appendChild(li); }
+  function sameSet(a, b) { return JSON.stringify(a.slice().sort()) === JSON.stringify(b.slice().sort()); }
+  function stamp(d) { return d.toISOString().replace(/[-:]/g, "").replace("T", "-").slice(0, 15); }
 
   function openGh() {
     $("ghpanel").hidden = false;
     $("ghopen").hidden = $("ghopen2").hidden = true;
-    $("ghstatus").textContent = "Reading the repo's current list…";
+    $("ghsave").hidden = true;
+    $("ghchanges").innerHTML = "";
+    $("ghstatus").textContent = "Checking what's on GitHub…";
     RockyDB.saved().then(function (m) {
-      m = m || { groups: [], clips: [] };
+      m = m || { groups: [], clips: [], order: {} };
       var nameOf = {};
       groups.forEach(function (g) { nameOf[g.id] = g.name; });
-      var byFile = {};
-      clips.forEach(function (c) { if (c.repo) byFile[c.id.slice(5)] = c; });
-      m.clips.forEach(function (entry) {
-        var c = byFile[entry.file];
-        if (c) entry.groups = c.groups.map(function (id) { return nameOf[id]; }).filter(Boolean);
+      var now = new Date();
+      var change = { made: now.toISOString() };
+
+      var names = groups.map(function (g) { return g.name; });
+      var was = m.groups || [];
+      if (JSON.stringify(names) !== JSON.stringify(was)) {
+        change.groups = names;
+        names.forEach(function (n) { if (was.indexOf(n) === -1) ghLine("New group: " + n); });
+        was.forEach(function (n) { if (names.indexOf(n) === -1) ghLine("Removed group: " + n); });
+        if (sameSet(names, was)) ghLine("Group order changed");
+      }
+
+      var baseByFile = {};
+      m.clips.forEach(function (e) { baseByFile[e.file] = e; });
+      var moved = [];
+      clips.forEach(function (c) {
+        if (!c.repo) return;
+        var f = c.id.slice(5), e = baseByFile[f];
+        if (!e) return;
+        var in_ = c.groups.map(function (id) { return nameOf[id]; }).filter(Boolean);
+        if (sameSet(in_, e.groups || [])) return;
+        moved.push({ file: f, groups: in_ });
+        ghLine(c.name + ": " + (in_.length ? "in " + in_.join(", ") : "in no group"));
       });
-      m.groups = groups.map(function (g) { return g.name; });
-      // Each group's clip order, as files. Only clips saved in the repo can be listed.
-      m.order = {};
+      if (moved.length) change.clips = moved;
+
+      // A group's order on GitHub: its saved order, then any other members in list order.
+      var order = {};
       groups.forEach(function (g) {
-        var files = groupList(g).filter(function (c) { return c.repo; }).map(function (c) { return c.id.slice(5); });
-        if (files.length) m.order[g.name] = files;
+        var cur = groupList(g).filter(function (c) { return c.repo; }).map(function (c) { return c.id.slice(5); });
+        var base = ((m.order || {})[g.name] || []).filter(function (f) { return cur.indexOf(f) !== -1; });
+        m.clips.forEach(function (e) { if (cur.indexOf(e.file) !== -1 && base.indexOf(e.file) === -1) base.push(e.file); });
+        if (cur.length > 1 && JSON.stringify(cur) !== JSON.stringify(base)) { order[g.name] = cur; ghLine(g.name + ": new order"); }
       });
-      var json = JSON.stringify(m, null, 2) + "\n";
-      $("ghjson").value = json;
-      $("ghsteps").innerHTML = "";
-      ghStep("Copy clips.json" + (CAN_DOWNLOAD ? " or download it" : "") + ".");
-      ghStep("Tap <b>Open clips.json on GitHub</b>. It opens the editor; you may need to sign in.");
-      ghStep("Select everything in the editor, paste over it, and tap <b>Commit changes</b>. The site updates in a minute or two.");
+      if (Object.keys(order).length) change.order = order;
+
       var local = clips.filter(function (c) { return !c.repo && c.groups.length; });
-      var savedInGroups = clips.filter(function (c) { return c.repo && c.groups.length; }).length;
-      var msg = groups.length + " group" + (groups.length === 1 ? "" : "s") + " ready to save, with " +
-        savedInGroups + " saved clip" + (savedInGroups === 1 ? "" : "s") + " in them, in the order you set.";
-      if (local.length) msg += " " + local.length + " clip" + (local.length === 1 ? " is" : "s are") +
+      var localNote = local.length ? " " + local.length + " clip" + (local.length === 1 ? " is" : "s are") +
         " in a group but only on this device, so " + (local.length === 1 ? "it" : "they") +
-        " won't be saved. Upload " + (local.length === 1 ? "it" : "them") + " with Add clips, then Make upload, first.";
-      $("ghstatus").textContent = msg;
+        " can't be saved yet. Upload " + (local.length === 1 ? "it" : "them") + " with Add clips, then Make upload, first." : "";
+      var count = $("ghchanges").children.length;
+      if (!count) {
+        $("ghstatus").textContent = "Nothing to save. Your groups match what's on GitHub." + localNote;
+        return;
+      }
+      $("ghstatus").textContent = count + " change" + (count === 1 ? "" : "s") + " to save:" + localNote;
+
+      ghFile = "changes-" + stamp(now) + ".json";
+      var text = JSON.stringify(change, null, 2) + "\n";
+      $("ghjson").value = text;
+      $("ghfilename").textContent = "Show " + ghFile;
+      // GitHub's new-file page takes the name and contents in the address, so one tap fills it in.
+      var url = "https://github.com/" + REPO + "/new/main/clips?filename=" + encodeURIComponent(ghFile) + "&value=" + encodeURIComponent(text);
+      var fits = url.length < 7000;
+      $("ghcommit").href = fits ? url : "https://github.com/" + REPO + "/new/main/clips?filename=" + encodeURIComponent(ghFile);
+      $("ghsteps").innerHTML = "";
+      if (fits) {
+        ghStep("Tap <b>Commit on GitHub</b>. It opens a new file in the clips folder with your changes filled in; you may need to sign in.");
+        ghStep("Tap <b>Commit changes</b>. The site updates in a minute or two.");
+      } else {
+        ghStep("Copy the file below" + (CAN_DOWNLOAD ? " or download it" : "") + ".");
+        ghStep("Tap <b>Commit on GitHub</b>, paste it in, and tap <b>Commit changes</b>.");
+      }
       $("ghdl").hidden = !CAN_DOWNLOAD;
+      $("ghsave").hidden = false;
     });
   }
   $("ghopen").addEventListener("click", openGh);
@@ -890,15 +947,15 @@
   $("ghclose").addEventListener("click", function () { $("ghpanel").hidden = true; render(); });
   $("ghcopy").addEventListener("click", function () {
     var t = $("ghjson");
-    function fallback() { t.focus(); t.select(); $("ghstatus").textContent = "Select all of the text above and copy it."; }
+    function fallback() { t.focus(); t.select(); $("ghstatus").textContent = "Select all of the text and copy it."; }
     try {
-      navigator.clipboard.writeText(t.value).then(function () { $("ghstatus").textContent = "Copied. Now open clips.json on GitHub and paste over everything."; }, fallback);
+      navigator.clipboard.writeText(t.value).then(function () { $("ghstatus").textContent = "Copied."; }, fallback);
     } catch (e) { fallback(); }
   });
   $("ghdl").addEventListener("click", function () {
     var a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([$("ghjson").value], { type: "application/json" }));
-    a.download = "clips.json";
+    a.download = ghFile;
     document.body.appendChild(a);
     a.click();
     a.remove();

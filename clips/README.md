@@ -26,6 +26,22 @@ details file named after it with `.json` added (`Song.mp3` and `Song.mp3.json`),
 The board finds these through GitHub's file list. An audio file with no entry anywhere still shows,
 with no group. If a clip is in both, `clips.json` wins.
 
-The **Add clips** page's **Make upload** button builds these files for you. **Save groups**
-on the board writes one complete `clips.json` that includes clips added on their own, plus each
-group's clip order under `"order"` (group name to a list of files).
+The **Add clips** page's **Make upload** button builds these files for you.
+
+**Save groups** on the board saves only what changed, as a dated change file in this folder
+(`changes-20261023-193000.json`):
+
+```json
+{
+  "made": "2026-10-23T19:30:00.000Z",
+  "groups": ["Rocky", "Grace"],
+  "clips": [{ "file": "OhNo.mp3", "groups": ["Grace", "Eva"] }],
+  "order": { "Eva": ["Applause.mp3", "KnockKnock.mp3"] }
+}
+```
+
+Every key but `made` is optional: `groups` is the full group list when groups were added, renamed or
+deleted, `clips` gives the new groups of clips that moved, and `order` gives the new clip order of
+groups that were reordered (`clips.json` can hold `order` too). Change files apply oldest first on top
+of `clips.json`, and only when newer than its `updated` time, so a full rewrite of `clips.json` with a
+new `updated` time replaces them.

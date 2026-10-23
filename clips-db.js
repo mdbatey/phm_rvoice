@@ -118,7 +118,11 @@ window.RockyDB = (function () {
   // with a details file next to it ("Song.mp3" + "Song.mp3.json", holding one clips.json entry), and an
   // audio file with neither still shows, with no group. The folder listing comes from GitHub's API;
   // without it (offline, rate limited, or inside the Claude viewer) only clips.json is used.
-  // clips.json wins over a details file for the same audio. Resolves null when there is nothing.
+  // clips.json wins over a details file for the same audio.
+  // Group edits saved from the board arrive as change files ("changes-20261023-193000.json") holding only
+  // what changed: { made, groups?, clips?: [{ file, groups }], order?: { group: [files] } }. They apply
+  // oldest first, and only when newer than clips.json's "updated" stamp, so a full rewrite of
+  // clips.json takes over from them. Resolves null when there is nothing.
   function saved() {
     return Promise.all([
       getJson("clips/clips.json"),
@@ -129,7 +133,7 @@ window.RockyDB = (function () {
         groups: base && Array.isArray(base.groups) ? base.groups.slice() : [],
         clips: base ? base.clips.slice() : [],
         // Clip order inside each group: { "Rocky": ["file.mp3", ...] }
-        order: base && base.order && typeof base.order === "object" ? base.order : {}
+        order: base && base.order && typeof base.order === "object" ? Object.assign({}, base.order) : {}
       };
       var have = {};
       m.clips.forEach(function (c) { if (c && c.file) have[c.file] = true; });
@@ -139,7 +143,12 @@ window.RockyDB = (function () {
       var details = names.filter(function (n) {
         return /\.json$/i.test(n) && n !== "clips.json" && audio[n.slice(0, -5)] && !have[n.slice(0, -5)];
       });
-      return Promise.all(details.map(function (n) { return getJson("clips/" + encodeURIComponent(n)); })).then(function (entries) {
+      var changeFiles = names.filter(function (n) { return /^changes-.*\.json$/i.test(n); }).sort();
+      return Promise.all([
+        Promise.all(details.map(function (n) { return getJson("clips/" + encodeURIComponent(n)); })),
+        Promise.all(changeFiles.map(function (n) { return getJson("clips/" + encodeURIComponent(n)); }))
+      ]).then(function (got) {
+        var entries = got[0];
         entries.forEach(function (e) {
           [].concat(e || []).forEach(function (c) {
             if (!c || !c.file || have[c.file] || !audio[c.file]) return;
@@ -152,9 +161,26 @@ window.RockyDB = (function () {
         Object.keys(audio).forEach(function (f) {
           if (!have[f]) { m.clips.push({ file: f, name: prettyName(f), groups: [] }); have[f] = true; }
         });
+        var since = base && base.updated ? String(base.updated) : "";
+        got[1].filter(function (ch) { return ch && ch.made && String(ch.made) > since; })
+          .sort(function (a, b) { return String(a.made) < String(b.made) ? -1 : 1; })
+          .forEach(function (ch) { applyChange(m, ch); });
         return base || m.clips.length ? m : null;
       });
     });
+  }
+
+  function applyChange(m, ch) {
+    if (Array.isArray(ch.groups)) m.groups = ch.groups.slice();
+    (ch.clips || []).forEach(function (e) {
+      if (!e || !e.file) return;
+      m.clips.forEach(function (c, i) {
+        if (c.file === e.file) m.clips[i] = { file: c.file, name: c.name, groups: (e.groups || []).slice() };
+      });
+    });
+    if (ch.order && typeof ch.order === "object") {
+      Object.keys(ch.order).forEach(function (g) { m.order[g] = ch.order[g]; });
+    }
   }
 
   function newId(prefix) { return prefix + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }

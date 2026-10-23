@@ -683,6 +683,7 @@
       }
       var zipping = CAN_DOWNLOAD && !!window.JSZip;
       var withList = changed > 0 || !zipping;
+      m.updated = new Date().toISOString();
       var full = JSON.stringify(m, null, 2) + "\n";
       var details = fresh.map(function (x) { return { file: x.entry.file + ".json", text: JSON.stringify(x.entry, null, 2) + "\n" }; });
       $("manifest").value = withList ? full : details.map(function (d) { return d.text; }).join("\n");
