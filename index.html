@@ -252,6 +252,7 @@
   .ghopen { align-self: flex-start; }
   /* Reorder: drag a pad by its grip (top left). The rest of the pad scrolls the page as usual. */
   .pad.reorder { cursor: default; }
+  .pad.reorder:active { transform: none; }
   .pad-lead { display: flex; align-items: center; gap: 8px; flex: none; }
   .pad.reorder .pad-key { font-variant-numeric: tabular-nums; }
   .pad.reorder .pad-groups { display: none; }
@@ -266,8 +267,17 @@
   .grip:active { cursor: grabbing; }
   .grip:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
   .grip svg { width: 14px; height: 20px; display: block; }
-  .sortable-ghost { opacity: 0.3; }
-  .sortable-drag { opacity: 0.95 !important; box-shadow: 0 10px 28px rgb(0 0 0 / 0.22); border-color: var(--accent); }
+  /* While dragging: the lifted pad follows the pointer; its slot stays open as a dashed gap. */
+  .drag-float {
+    position: fixed; left: 0; top: 0; z-index: 50; margin: 0;
+    pointer-events: none; will-change: transform;
+    border-color: var(--accent);
+    box-shadow: 0 14px 34px rgb(0 0 0 / 0.25);
+    transition: none;
+  }
+  .pad.drag-slot { background: transparent; border: 1.5px dashed var(--accent); box-shadow: none; }
+  .pad.drag-slot > * { visibility: hidden; }
+  body.dragging { cursor: grabbing; user-select: none; -webkit-user-select: none; }
   .ghpanel {
     display: flex; flex-direction: column; gap: 10px;
     background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 14px;
@@ -363,7 +373,6 @@
 
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
 <script src="clips-db.js"></script>
 <script>
 (function () {
@@ -387,7 +396,7 @@
   var gform = $("gform"), gname = $("gname"), gbar = $("gbar"), gconfirm = $("gconfirm"), pickBtn = $("gpick");
   var ACTIVE_KEY = "rocky-active-group";
   var clips = [], groups = [], active = "all", picking = false, reordering = false, formMode = null;
-  var repoOrder = {}, sortable = null;
+  var repoOrder = {};
   var urls = {}, clipAudio = null, clipPad = null, clipId = null;
   try { active = localStorage.getItem(ACTIVE_KEY) || "all"; } catch (e) {}
 
@@ -489,6 +498,100 @@
     if (grip) grip.focus();
   }
 
+  // ---- Drag to reorder. The pad lifts and follows the pointer; the other pads slide over to open a gap
+  // at whichever slot's centre is nearest, and the page scrolls when the pointer nears the top or bottom.
+  // Slot positions come from offsetLeft/offsetTop, which ignore the slide animations, so the gap
+  // doesn't jitter while pads are moving. ----
+  function slideMove(doMove) {
+    var pads = Array.prototype.slice.call(mygrid.children);
+    var before = pads.map(function (p) { return [p.offsetLeft, p.offsetTop]; });
+    doMove();
+    pads.forEach(function (p, i) {
+      var dx = before[i][0] - p.offsetLeft, dy = before[i][1] - p.offsetTop;
+      if (!dx && !dy) return;
+      p.style.transition = "none";
+      p.style.transform = "translate(" + dx + "px," + dy + "px)";
+      p.getBoundingClientRect();
+      p.style.transition = "transform 180ms ease";
+      p.style.transform = "";
+    });
+  }
+
+  function startDrag(e, pad, grip, g) {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    e.preventDefault();
+    var rect = pad.getBoundingClientRect();
+    var offX = e.clientX - rect.left, offY = e.clientY - rect.top;
+    var px = e.clientX, py = e.clientY, frame = 0, done = false;
+    var float = pad.cloneNode(true);
+    float.classList.add("drag-float");
+    float.style.width = rect.width + "px";
+    float.style.height = rect.height + "px";
+    document.body.appendChild(float);
+    pad.classList.add("drag-slot");
+    document.body.classList.add("dragging");
+
+    function follow() {
+      float.style.transform = "translate(" + (px - offX) + "px," + (py - offY) + "px) scale(1.04)";
+    }
+    function reposition() {
+      var gr = mygrid.getBoundingClientRect(), ox = mygrid.offsetLeft, oy = mygrid.offsetTop;
+      var cx = px - offX + rect.width / 2, cy = py - offY + rect.height / 2;
+      var best = null, bestD = Infinity;
+      Array.prototype.forEach.call(mygrid.children, function (p) {
+        var x = gr.left + p.offsetLeft - ox + p.offsetWidth / 2, y = gr.top + p.offsetTop - oy + p.offsetHeight / 2;
+        var d = (x - cx) * (x - cx) + (y - cy) * (y - cy);
+        if (d < bestD) { bestD = d; best = p; }
+      });
+      if (!best || best === pad) return;
+      var kids = Array.prototype.slice.call(mygrid.children);
+      var after = kids.indexOf(best) > kids.indexOf(pad);
+      slideMove(function () { mygrid.insertBefore(pad, after ? best.nextSibling : best); });
+    }
+    // Auto-scroll: faster the closer the pointer is to the edge. The top edge sits below the pinned bar.
+    function tick() {
+      if (done) return;
+      var top = document.querySelector(".controls").getBoundingClientRect().bottom;
+      var zone = 90, v = 0;
+      if (py < top + zone) v = -Math.ceil(((top + zone - py) / zone) * 18);
+      else if (py > innerHeight - zone) v = Math.ceil(((py - (innerHeight - zone)) / zone) * 18);
+      if (v) { scrollBy(0, v); reposition(); }
+      frame = requestAnimationFrame(tick);
+    }
+    function move(ev) {
+      if (ev.pointerId !== e.pointerId) return;
+      px = ev.clientX; py = ev.clientY;
+      follow();
+      reposition();
+    }
+    function end(ev) {
+      if (done || (ev && ev.pointerId !== e.pointerId)) return;
+      done = true;
+      cancelAnimationFrame(frame);
+      removeEventListener("pointermove", move);
+      removeEventListener("pointerup", end);
+      removeEventListener("pointercancel", end);
+      document.body.classList.remove("dragging");
+      var to = pad.getBoundingClientRect();
+      float.style.transition = "transform 160ms ease";
+      float.style.transform = "translate(" + to.left + "px," + to.top + "px)";
+      setTimeout(function () {
+        float.remove();
+        pad.classList.remove("drag-slot");
+        setOrder(g, Array.prototype.map.call(mygrid.children, function (el) { return el.dataset.id; }));
+        render();
+        var again = mygrid.querySelector('.pad[data-id="' + CSS.escape(pad.dataset.id) + '"] .grip');
+        if (again) again.focus({ preventScroll: true });
+      }, 170);
+    }
+    // Listen on the window: moving the pad in the page ends any pointer capture on its grip.
+    addEventListener("pointermove", move);
+    addEventListener("pointerup", end);
+    addEventListener("pointercancel", end);
+    follow();
+    frame = requestAnimationFrame(tick);
+  }
+
   // Reorder pad: drag by the six-dot grip, or focus the grip and use the arrow keys.
   function makeOrderPad(c, g, i, n) {
     var pad = document.createElement("div");
@@ -501,6 +604,7 @@
     pad.querySelector(".pad-key").textContent = (i + 1) + " of " + n;
     showGroupTags(pad, c);
     var grip = pad.querySelector(".grip");
+    grip.addEventListener("pointerdown", function (e) { startDrag(e, pad, grip, g); });
     grip.setAttribute("aria-label", "Move " + c.name + ", " + (i + 1) + " of " + n + ". Drag, or use the arrow keys.");
     grip.addEventListener("keydown", function (e) {
       var by = { ArrowUp: -1, ArrowLeft: -1, ArrowDown: 1, ArrowRight: 1 }[e.key];
@@ -718,28 +822,9 @@
     var list = g && !picking ? groupList(g) : clips;
     if (clipPad) clipPad.classList.remove("playing");
     clipPad = null;
-    if (sortable) { sortable.destroy(); sortable = null; }
     mygrid.innerHTML = "";
     if (g && reordering) {
       list.forEach(function (c, i) { mygrid.appendChild(makeOrderPad(c, g, i, list.length)); });
-      if (window.Sortable) {
-        sortable = Sortable.create(mygrid, {
-          handle: ".grip",
-          animation: 150,
-          // The fallback drag (instead of the browser's own) behaves the same with mouse and touch,
-          // and lets the page auto-scroll near the top or bottom of the screen.
-          forceFallback: true,
-          fallbackTolerance: 3,
-          scroll: true,
-          bubbleScroll: true,
-          scrollSensitivity: 110,
-          scrollSpeed: 16,
-          onEnd: function () {
-            setOrder(g, Array.prototype.map.call(mygrid.children, function (el) { return el.dataset.id; }));
-            render();
-          }
-        });
-      }
     } else {
       list.forEach(function (c) { mygrid.appendChild(makePad(c, g)); });
     }
