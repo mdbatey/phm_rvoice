@@ -26,5 +26,6 @@ details file named after it with `.json` added (`Song.mp3` and `Song.mp3.json`),
 The board finds these through GitHub's file list. An audio file with no entry anywhere still shows,
 with no group. If a clip is in both, `clips.json` wins.
 
-The **Add clips** page's **Make upload** button builds these files for you. **Save groups to GitHub**
-on the board writes one complete `clips.json` that includes clips added on their own.
+The **Add clips** page's **Make upload** button builds these files for you. **Save groups**
+on the board writes one complete `clips.json` that includes clips added on their own, plus each
+group's clip order under `"order"` (group name to a list of files).

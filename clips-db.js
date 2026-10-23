@@ -125,7 +125,12 @@ window.RockyDB = (function () {
       getJson("https://api.github.com/repos/" + REPO + "/contents/clips")
     ]).then(function (r) {
       var base = r[0] && Array.isArray(r[0].clips) ? r[0] : null;
-      var m = { groups: base && Array.isArray(base.groups) ? base.groups.slice() : [], clips: base ? base.clips.slice() : [] };
+      var m = {
+        groups: base && Array.isArray(base.groups) ? base.groups.slice() : [],
+        clips: base ? base.clips.slice() : [],
+        // Clip order inside each group: { "Rocky": ["file.mp3", ...] }
+        order: base && base.order && typeof base.order === "object" ? base.order : {}
+      };
       var have = {};
       m.clips.forEach(function (c) { if (c && c.file) have[c.file] = true; });
       var names = Array.isArray(r[1]) ? r[1].map(function (f) { return f && f.name; }).filter(Boolean) : [];
