@@ -102,12 +102,54 @@ window.RockyDB = (function () {
     return (repoGroups || []).map(toId);
   }
 
-  // The repo's clips/clips.json, or null when there isn't one.
-  function saved() {
-    return fetch("clips/clips.json", { cache: "no-cache" })
+  // The GitHub repo behind the site: owner.github.io/repo, or this one when viewed elsewhere.
+  var REPO = "mdbatey/phm_rvoice";
+  var ghHost = location.hostname.match(/^([^.]+)\.github\.io$/), ghPath = location.pathname.split("/")[1];
+  if (ghHost && ghPath) REPO = ghHost[1] + "/" + ghPath;
+  var AUDIO_RE = /\.(mp3|m4a|aac|wav|ogg|oga|opus|flac|webm)$/i;
+
+  function getJson(url) {
+    return fetch(url, { cache: "no-cache" })
       .then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (m) { return m && Array.isArray(m.clips) ? m : null; })
       .catch(function () { return null; });
+  }
+
+  // Every clip saved in the repo. clips/clips.json is the main list. A clip uploaded on its own comes
+  // with a details file next to it ("Song.mp3" + "Song.mp3.json", holding one clips.json entry), and an
+  // audio file with neither still shows, with no group. The folder listing comes from GitHub's API;
+  // without it (offline, rate limited, or inside the Claude viewer) only clips.json is used.
+  // clips.json wins over a details file for the same audio. Resolves null when there is nothing.
+  function saved() {
+    return Promise.all([
+      getJson("clips/clips.json"),
+      getJson("https://api.github.com/repos/" + REPO + "/contents/clips")
+    ]).then(function (r) {
+      var base = r[0] && Array.isArray(r[0].clips) ? r[0] : null;
+      var m = { groups: base && Array.isArray(base.groups) ? base.groups.slice() : [], clips: base ? base.clips.slice() : [] };
+      var have = {};
+      m.clips.forEach(function (c) { if (c && c.file) have[c.file] = true; });
+      var names = Array.isArray(r[1]) ? r[1].map(function (f) { return f && f.name; }).filter(Boolean) : [];
+      var audio = {};
+      names.forEach(function (n) { if (AUDIO_RE.test(n)) audio[n] = true; });
+      var details = names.filter(function (n) {
+        return /\.json$/i.test(n) && n !== "clips.json" && audio[n.slice(0, -5)] && !have[n.slice(0, -5)];
+      });
+      return Promise.all(details.map(function (n) { return getJson("clips/" + encodeURIComponent(n)); })).then(function (entries) {
+        entries.forEach(function (e) {
+          [].concat(e || []).forEach(function (c) {
+            if (!c || !c.file || have[c.file] || !audio[c.file]) return;
+            var groups = Array.isArray(c.groups) ? c.groups : [];
+            m.clips.push({ file: c.file, name: c.name || prettyName(c.file), groups: groups });
+            have[c.file] = true;
+            groups.forEach(function (g) { if (m.groups.indexOf(g) === -1) m.groups.push(g); });
+          });
+        });
+        Object.keys(audio).forEach(function (f) {
+          if (!have[f]) { m.clips.push({ file: f, name: prettyName(f), groups: [] }); have[f] = true; }
+        });
+        return base || m.clips.length ? m : null;
+      });
+    });
   }
 
   function newId(prefix) { return prefix + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }

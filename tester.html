@@ -252,8 +252,8 @@
       <div class="repo-out" id="repoOut" hidden>
         <ol class="steps" id="steps"></ol>
         <details class="manifest-box" id="manifestBox">
-          <summary>Show clips.json</summary>
-          <p class="note">The full list of every clip and its groups. It has to be the whole list, because uploading it replaces the one on GitHub.</p>
+          <summary id="manifestSummary">Show clips.json</summary>
+          <p class="note" id="manifestNote"></p>
           <textarea class="manifest" id="manifest" readonly rows="8" aria-label="clips.json contents"></textarea>
           <div class="send-row">
             <button type="button" class="btn ghost" id="copy">Copy clips.json</button>
@@ -644,73 +644,93 @@
   function addStep(html) { var li = document.createElement("li"); li.innerHTML = html; $("steps").appendChild(li); }
   function esc(t) { var d = document.createElement("div"); d.textContent = t; return d.innerHTML; }
 
+  // New clips go up as just their audio plus a small details file each ("Song.mp3.json"), so clips.json
+  // is left alone. clips.json is only included when clips already on GitHub change groups, or when there
+  // is no zip (the Claude viewer), where pasting one list is simpler than creating several files.
   $("pack").addEventListener("click", function () {
     var kept = items.filter(function (it) { return it.kept; });
     if (!kept.length) return;
     var group = destGroupName();
     var repoStatus = $("repoStatus");
-    repoStatus.textContent = "Reading the repo's current list…";
-    fetch("clips/clips.json", { cache: "no-cache" })
-      .then(function (r) { return r.ok ? r.json() : null; })
-      .catch(function () { return null; })
-      .then(function (m) {
-        m = m && Array.isArray(m.clips) ? m : { groups: [], clips: [] };
-        m.groups = Array.isArray(m.groups) ? m.groups : [];
-        if (group && m.groups.indexOf(group) === -1) m.groups.push(group);
-        var byFile = {};
-        m.clips.forEach(function (c) { byFile[c.file] = c; });
-        var files = [], seen = {}, clash = [];
-        kept.forEach(function (it) {
-          var f = baseName(it.path);
-          if (seen[f]) { clash.push(f); return; }
-          seen[f] = it;
-          var c = byFile[f];
-          if (!c) { c = { file: f, name: it.name, groups: [] }; m.clips.push(c); byFile[f] = c; files.push(it); }
-          c.groups = c.groups || [];
-          if (group && c.groups.indexOf(group) === -1) c.groups.push(group);
-        });
-        var json = JSON.stringify(m, null, 2) + "\n";
-        $("manifest").value = json;
-        $("steps").innerHTML = "";
-        var where = group ? " in " + esc(group) : "";
-        var zipping = CAN_DOWNLOAD && !!window.JSZip;
-        if (zipping) {
-          addStep("Unzip <code>rocky-upload.zip</code> (it just downloaded).");
-          addStep("On GitHub, open the repo's <code>clips</code> folder and choose <b>Add file</b>, then <b>Upload files</b>.");
-          addStep("Drag in everything from the unzipped folder, including <code>clips.json</code>, and commit. The site updates in a minute or two.");
-        } else {
-          addStep("Open the GitHub site version of this page to download everything in one zip. Here, do it by hand:");
-          addStep("On GitHub, open <code>clips/clips.json</code>, tap the pencil, replace everything with the text below, and commit.");
-          if (files.length) addStep("In the <code>clips</code> folder, choose <b>Add file</b>, then <b>Upload files</b>, and add these " + files.length + " files from your zip: " +
-            files.map(function (it) { return "<code>" + esc(baseName(it.path)) + "</code>"; }).join(", ") + ".");
+    repoStatus.textContent = "Reading what's on GitHub…";
+    RockyDB.saved().then(function (m) {
+      m = m || { groups: [], clips: [] };
+      var byFile = {};
+      m.clips.forEach(function (c) { byFile[c.file] = c; });
+      var fresh = [], changed = 0, seen = {}, clash = [];
+      kept.forEach(function (it) {
+        var f = baseName(it.path);
+        if (seen[f]) { clash.push(f); return; }
+        seen[f] = true;
+        var c = byFile[f];
+        if (!c) {
+          c = { file: f, name: it.name, groups: group ? [group] : [] };
+          m.clips.push(c);
+          byFile[f] = c;
+          fresh.push({ it: it, entry: c });
+          return;
         }
-        $("repoOut").hidden = false;
-        // Without the zip, the text is what gets pasted into GitHub, so show it.
-        $("manifestBox").open = !zipping;
-        var msg = zipping
-          ? "rocky-upload.zip has only what's new: " + files.length + " audio file" + (files.length === 1 ? "" : "s") +
-            " and the updated clips.json" + (group ? ", with them in " + group : "") + "."
-          : kept.length - clash.length + " clip" + (kept.length - clash.length === 1 ? "" : "s") + where + ", " + files.length + " new to the repo.";
-        if (clash.length) msg += " Skipped " + clash.length + " with the same file name as another kept clip: " + clash.join(", ") + ".";
-        if (!zipping) { repoStatus.textContent = msg; return; }
-        repoStatus.textContent = "Packing " + files.length + " files…";
-        var zip = new JSZip();
-        zip.file("clips.json", json);
-        return Promise.all(files.map(blobFor)).then(function (blobs) {
-          files.forEach(function (it, n) { zip.file(baseName(it.path), blobs[n]); });
-          return zip.generateAsync({ type: "blob" });
-        }).then(function (z) {
-          var a = document.createElement("a");
-          a.href = URL.createObjectURL(z);
-          a.download = "rocky-upload.zip";
-          document.body.appendChild(a);
-          a.click();
-          a.remove();
-          setTimeout(function () { URL.revokeObjectURL(a.href); }, 60000);
-          repoStatus.textContent = msg;
-        });
-      })
-      .catch(function () { repoStatus.textContent = "Couldn't make the upload. Try again, or copy clips.json below by hand."; });
+        c.groups = c.groups || [];
+        if (group && c.groups.indexOf(group) === -1) { c.groups.push(group); changed++; }
+      });
+      if (group && m.groups.indexOf(group) === -1) m.groups.push(group);
+      var skipped = clash.length ? " Skipped " + clash.length + " with the same file name as another kept clip: " + clash.join(", ") + "." : "";
+      $("steps").innerHTML = "";
+      if (!fresh.length && !changed) {
+        $("repoOut").hidden = true;
+        repoStatus.textContent = "Nothing to upload. Those clips are already on GitHub" + (group ? " in " + group : "") + "." + skipped;
+        return;
+      }
+      var zipping = CAN_DOWNLOAD && !!window.JSZip;
+      var withList = changed > 0 || !zipping;
+      var full = JSON.stringify(m, null, 2) + "\n";
+      var details = fresh.map(function (x) { return { file: x.entry.file + ".json", text: JSON.stringify(x.entry, null, 2) + "\n" }; });
+      $("manifest").value = withList ? full : details.map(function (d) { return d.text; }).join("\n");
+      $("manifestSummary").textContent = withList ? "Show clips.json" : "Show the details file" + (details.length === 1 ? "" : "s");
+      $("manifestNote").textContent = withList
+        ? "The full list of every clip and its groups. It has to be the whole list, because uploading it replaces the one on GitHub."
+        : "Each new clip's name and groups, in its own small file next to the audio. clips.json stays as it is.";
+      $("copy").textContent = withList ? "Copy clips.json" : "Copy";
+      var newFiles = fresh.map(function (x) { return "<code>" + esc(x.entry.file) + "</code>"; }).join(", ");
+      if (zipping) {
+        addStep("Unzip <code>rocky-upload.zip</code> (it just downloaded).");
+        addStep("On GitHub, open the repo's <code>clips</code> folder and choose <b>Add file</b>, then <b>Upload files</b>.");
+        addStep("Drag in everything from the unzipped folder and commit. The site updates in a minute or two.");
+      } else {
+        addStep("Open the GitHub site version of this page to download everything in one zip. Here, do it by hand:");
+        addStep("On GitHub, open <code>clips/clips.json</code>, tap the pencil, replace everything with the text below, and commit.");
+        if (fresh.length) addStep("In the <code>clips</code> folder, choose <b>Add file</b>, then <b>Upload files</b>, and add " + newFiles + ".");
+      }
+      $("repoOut").hidden = false;
+      // Without the zip, the text is what gets pasted into GitHub, so show it.
+      $("manifestBox").open = !zipping;
+      var n = fresh.length, s = n === 1 ? "" : "s";
+      var msg = !zipping
+        ? kept.length - clash.length + " clip" + (kept.length - clash.length === 1 ? "" : "s") + (group ? " in " + group : "") + ", " + n + " new to the repo."
+        : "rocky-upload.zip has " + [
+            n ? n + " audio file" + s + " and " + (n === 1 ? "its details file" : "their details files") : "",
+            changed ? "the updated clips.json, because " + changed + " clip" + (changed === 1 ? "" : "s") + " already on GitHub joined " + group : ""
+          ].filter(Boolean).join(", plus ") + ".";
+      msg += skipped;
+      if (!zipping) { repoStatus.textContent = msg; return; }
+      repoStatus.textContent = "Packing…";
+      var zip = new JSZip();
+      if (withList) zip.file("clips.json", full);
+      details.forEach(function (d) { zip.file(d.file, d.text); });
+      return Promise.all(fresh.map(function (x) { return blobFor(x.it); })).then(function (blobs) {
+        fresh.forEach(function (x, i) { zip.file(x.entry.file, blobs[i]); });
+        return zip.generateAsync({ type: "blob" });
+      }).then(function (z) {
+        var a = document.createElement("a");
+        a.href = URL.createObjectURL(z);
+        a.download = "rocky-upload.zip";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(function () { URL.revokeObjectURL(a.href); }, 60000);
+        repoStatus.textContent = msg;
+      });
+    }).catch(function () { repoStatus.textContent = "Couldn't make the upload. Try again."; });
   });
 
   $("copy").addEventListener("click", function () {
