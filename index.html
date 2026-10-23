@@ -126,15 +126,29 @@
   }
   .pad-bars i.on { opacity: 1; height: 22px; }
 
+  /* Volume stays pinned to the top while a long clip list scrolls under it. */
   .controls {
+    position: sticky;
+    top: env(safe-area-inset-top, 0px);
+    z-index: 5;
+    background: var(--bg);
     display: flex;
     align-items: center;
     gap: 14px;
-    padding-top: 6px;
-    border-top: 1px solid var(--rule);
+    padding-block: 6px;
+    border-bottom: 1px solid var(--rule);
   }
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0 0 auto;
+    height: env(safe-area-inset-top, 0px);
+    z-index: 10;
+    background: var(--bg);
+  }
+  .controls .vol-n { font-family: var(--font-mono); font-size: 12px; color: var(--muted); min-width: 3ch; text-align: right; font-variant-numeric: tabular-nums; }
   .controls label { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
-  .mine { display: flex; flex-direction: column; gap: 12px; padding-top: 6px; border-top: 1px solid var(--rule); }
+  .mine { display: flex; flex-direction: column; gap: 12px; }
   .mine-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
   .mine h2 { font-family: var(--font-display); font-weight: 500; font-size: 18px; margin: 0; }
   .mine-actions { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -203,6 +217,12 @@
     <a class="hlink" href="examples.html">Hear the chord examples &rarr;</a>
   </header>
 
+  <div class="controls">
+    <label for="vol">Volume</label>
+    <input id="vol" type="range" min="0" max="100" value="70">
+    <span class="vol-n" id="vol-n" aria-hidden="true">70</span>
+  </div>
+
   <section class="mine" aria-labelledby="mine-h">
     <div class="mine-head">
       <h2 id="mine-h">Your clips</h2>
@@ -235,17 +255,21 @@
     <div class="grid" id="mygrid"></div>
   </section>
 
-  <div class="controls">
-    <label for="vol">Volume</label>
-    <input id="vol" type="range" min="0" max="100" value="70">
-  </div>
-
 </div>
 
 <script src="clips-db.js"></script>
 <script>
 (function () {
   var volEl = document.getElementById("vol");
+  var volN = document.getElementById("vol-n");
+  var VOL_KEY = "rocky-volume";
+  try { var savedVol = localStorage.getItem(VOL_KEY); if (savedVol !== null) volEl.value = savedVol; } catch (e) {}
+  volN.textContent = volEl.value;
+  volEl.addEventListener("input", function () {
+    volN.textContent = volEl.value;
+    if (clipAudio) clipAudio.volume = Math.min(1, volEl.value / 100);
+    try { localStorage.setItem(VOL_KEY, volEl.value); } catch (e) {}
+  });
 
   // ---- User's own clips and groups: kept in this browser's IndexedDB (clips-db.js), never published ----
   function $(id) { return document.getElementById(id); }
