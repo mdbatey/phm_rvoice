@@ -150,6 +150,15 @@
   .send h2 { font-family: var(--font-display); font-weight: 500; font-size: 18px; margin: 0; }
   .send-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
   .note { margin: 0; font-size: 13px; color: var(--muted); max-width: 54ch; }
+  .repo { display: flex; flex-direction: column; gap: 10px; padding-top: 10px; border-top: 1px solid var(--rule); }
+  .repo-out { display: flex; flex-direction: column; gap: 10px; }
+  .steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; font-size: 14px; max-width: 56ch; }
+  .steps code { font-family: var(--font-mono); font-size: 12px; overflow-wrap: anywhere; }
+  .manifest {
+    width: 100%; min-width: 0; resize: vertical;
+    font: 12px/1.5 var(--font-mono); color: var(--fg);
+    background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 10px;
+  }
   kbd { font-family: var(--font-mono); font-size: 12px; border: 1px solid var(--rule); border-radius: 3px; padding: 0 4px; }
 
   @media (prefers-reduced-motion: reduce) { .drop { transition: none; } }
@@ -205,6 +214,21 @@
     </div>
     <div class="status" id="sendStatus" role="status"></div>
     <p class="note">To set up several people, keep one person's clips, add them to that person's group, tap Clear kept, then pick the next set. A clip can be in more than one group.</p>
+    <div class="repo">
+      <h2>Save to the repo</h2>
+      <p class="note">Clips saved in the repo's clips folder show up on the GitHub site on every device. This makes the upload for your kept clips, in the group picked above.</p>
+      <div class="send-row">
+        <button type="button" class="btn" id="pack" disabled>Make upload</button>
+      </div>
+      <div class="status" id="repoStatus" role="status"></div>
+      <div class="repo-out" id="repoOut" hidden>
+        <ol class="steps" id="steps"></ol>
+        <textarea class="manifest" id="manifest" readonly rows="8" aria-label="clips.json contents"></textarea>
+        <div class="send-row">
+          <button type="button" class="btn ghost" id="copy">Copy clips.json</button>
+        </div>
+      </div>
+    </div>
     <p class="note">Keys: <kbd>Space</kbd> play or stop, <kbd>&darr;</kbd> <kbd>&uarr;</kbd> next and previous, <kbd>K</kbd> keep. Clips you add are saved in this browser's copy of the board, the same place as "Your clips".</p>
   </section>
 </div>
@@ -313,7 +337,7 @@
     $("count").textContent = shown.length + " / " + items.length + " · " + keptN + " kept";
     $("none").hidden = !items.length || shown.length > 0;
     $("bar").hidden = $("send").hidden = !items.length;
-    $("add").disabled = $("unkeep").disabled = keptN === 0;
+    $("add").disabled = $("unkeep").disabled = $("pack").disabled = keptN === 0;
     $("add").textContent = keptN ? "Add " + keptN + " kept clip" + (keptN === 1 ? "" : "s") : "Add kept clips";
   }
 
@@ -523,6 +547,90 @@
     }).catch(function () {
       sendStatus.textContent = "Couldn't save to the board. This browser may be blocking site storage, for example in a private window.";
     });
+  });
+
+  // ---- Save to the repo: build clips/clips.json (merged with what the repo already has) and, where the
+  // browser allows downloads (the GitHub site), a zip of the kept audio plus clips.json to upload. ----
+  var CAN_DOWNLOAD = /(^|\.)github\.io$|^localhost$|^127\./.test(location.hostname) || location.protocol === "file:";
+  function baseName(p) { return p.replace(/^.*\//, ""); }
+  function destGroupName() {
+    if (destEl.value === "__new") return newName.value.trim();
+    var g = groups.filter(function (x) { return x.id === destEl.value; })[0];
+    return g ? g.name : "";
+  }
+  function addStep(html) { var li = document.createElement("li"); li.innerHTML = html; $("steps").appendChild(li); }
+  function esc(t) { var d = document.createElement("div"); d.textContent = t; return d.innerHTML; }
+
+  $("pack").addEventListener("click", function () {
+    var kept = items.filter(function (it) { return it.kept; });
+    if (!kept.length) return;
+    var group = destGroupName();
+    var repoStatus = $("repoStatus");
+    repoStatus.textContent = "Reading the repo's current list…";
+    fetch("clips/clips.json", { cache: "no-cache" })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .catch(function () { return null; })
+      .then(function (m) {
+        m = m && Array.isArray(m.clips) ? m : { groups: [], clips: [] };
+        m.groups = Array.isArray(m.groups) ? m.groups : [];
+        if (group && m.groups.indexOf(group) === -1) m.groups.push(group);
+        var byFile = {};
+        m.clips.forEach(function (c) { byFile[c.file] = c; });
+        var files = [], seen = {}, clash = [];
+        kept.forEach(function (it) {
+          var f = baseName(it.path);
+          if (seen[f]) { clash.push(f); return; }
+          seen[f] = it;
+          var c = byFile[f];
+          if (!c) { c = { file: f, name: it.name, groups: [] }; m.clips.push(c); byFile[f] = c; files.push(it); }
+          c.groups = c.groups || [];
+          if (group && c.groups.indexOf(group) === -1) c.groups.push(group);
+        });
+        var json = JSON.stringify(m, null, 2) + "\n";
+        $("manifest").value = json;
+        $("steps").innerHTML = "";
+        var where = group ? " in " + esc(group) : "";
+        var zipping = CAN_DOWNLOAD && !!window.JSZip;
+        if (zipping) {
+          addStep("Unzip <code>rocky-upload.zip</code> (it just downloaded).");
+          addStep("On GitHub, open the repo's <code>clips</code> folder and choose <b>Add file</b>, then <b>Upload files</b>.");
+          addStep("Drag in everything from the unzipped folder, including <code>clips.json</code>, and commit. The site updates in a minute or two.");
+        } else {
+          addStep("Open the GitHub site version of this page to download everything in one zip. Here, do it by hand:");
+          addStep("On GitHub, open <code>clips/clips.json</code>, tap the pencil, replace everything with the text below, and commit.");
+          if (files.length) addStep("In the <code>clips</code> folder, choose <b>Add file</b>, then <b>Upload files</b>, and add these " + files.length + " files from your zip: " +
+            files.map(function (it) { return "<code>" + esc(baseName(it.path)) + "</code>"; }).join(", ") + ".");
+        }
+        $("repoOut").hidden = false;
+        var msg = kept.length - clash.length + " clip" + (kept.length - clash.length === 1 ? "" : "s") + where + ", " + files.length + " new to the repo.";
+        if (clash.length) msg += " Skipped " + clash.length + " with the same file name as another kept clip: " + clash.join(", ") + ".";
+        if (!zipping) { repoStatus.textContent = msg; return; }
+        repoStatus.textContent = "Packing " + files.length + " files…";
+        var zip = new JSZip();
+        zip.file("clips.json", json);
+        return Promise.all(files.map(blobFor)).then(function (blobs) {
+          files.forEach(function (it, n) { zip.file(baseName(it.path), blobs[n]); });
+          return zip.generateAsync({ type: "blob" });
+        }).then(function (z) {
+          var a = document.createElement("a");
+          a.href = URL.createObjectURL(z);
+          a.download = "rocky-upload.zip";
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(function () { URL.revokeObjectURL(a.href); }, 60000);
+          repoStatus.textContent = msg;
+        });
+      })
+      .catch(function () { repoStatus.textContent = "Couldn't make the upload. Try again, or copy clips.json below by hand."; });
+  });
+
+  $("copy").addEventListener("click", function () {
+    var t = $("manifest");
+    var done = function () { $("repoStatus").textContent = "Copied clips.json."; };
+    try {
+      navigator.clipboard.writeText(t.value).then(done, function () { t.focus(); t.select(); $("repoStatus").textContent = "Select all and copy the text below."; });
+    } catch (e) { t.focus(); t.select(); }
   });
 
   render();

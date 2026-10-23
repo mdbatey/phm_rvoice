@@ -1,3 +1,8 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Rocky Board</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -40,8 +45,11 @@
     color-scheme: dark;
   }
 
+  :root { color-scheme: light; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   body {
+    margin: 0;
     background: var(--bg);
     color: var(--fg);
     font-family: var(--font-body);
@@ -208,7 +216,8 @@
     .pad, .pad-bars i { transition: none; }
   }
 </style>
-
+</head>
+<body>
 <div class="wrap">
   <header>
     <div class="kicker">Eridian chord speech</div>
@@ -230,7 +239,7 @@
         <label class="btn" for="files">Add clips</label>
         <input id="files" type="file" accept="audio/*" multiple hidden>
         <a class="btn ghost" href="tester.html">Test a batch</a>
-        <button type="button" class="btn ghost" id="clear" hidden>Clear</button>
+        <button type="button" class="btn ghost" id="clear" hidden>Clear this device</button>
       </div>
     </div>
     <div class="chips" id="chips" role="group" aria-label="Clip groups"></div>
@@ -250,7 +259,7 @@
       <button type="button" class="gbtn primary" id="gdelete-yes">Delete group</button>
       <button type="button" class="gbtn" id="gdelete-no">Cancel</button>
     </div>
-    <p class="note" id="mine-empty">Pick audio files saved on your phone or computer, and each one becomes a pad named after its file. Have a whole zip? Use Test a batch to listen through it and send the keepers here. Clips stay in this browser only and are never added to the page itself.</p>
+    <p class="note" id="mine-empty">Pick audio files saved on your phone or computer, and each one becomes a pad named after its file. Have a whole zip? Use Test a batch to listen through it and send the keepers here. Clips you add here stay in this browser. Clips saved in the repo's clips folder show up everywhere, marked saved.</p>
     <p class="note" id="group-empty" hidden></p>
     <div class="grid" id="mygrid"></div>
   </section>
@@ -271,18 +280,55 @@
     try { localStorage.setItem(VOL_KEY, volEl.value); } catch (e) {}
   });
 
-  // ---- User's own clips and groups: kept in this browser's IndexedDB (clips-db.js), never published ----
+  // ---- Clips and groups. Saved clips come from the repo's clips/clips.json; the rest live in this
+  // browser's IndexedDB (clips-db.js). Group changes to saved clips are remembered in this browser only. ----
   function $(id) { return document.getElementById(id); }
   var mygrid = $("mygrid"), filesEl = $("files"), clearEl = $("clear");
   var emptyEl = $("mine-empty"), groupEmptyEl = $("group-empty"), chipsEl = $("chips");
   var gform = $("gform"), gname = $("gname"), gbar = $("gbar"), gconfirm = $("gconfirm"), pickBtn = $("gpick");
-  var ACTIVE_KEY = "rocky-active-group";
+  var ACTIVE_KEY = "rocky-active-group", OVERRIDE_KEY = "rocky-saved-clip-groups";
   var clips = [], groups = [], active = "all", picking = false, formMode = null;
   var urls = {}, clipAudio = null, clipPad = null;
   try { active = localStorage.getItem(ACTIVE_KEY) || "all"; } catch (e) {}
 
   function prettyName(n) {
     return n.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
+  }
+
+  function loadOverrides() { try { return JSON.parse(localStorage.getItem(OVERRIDE_KEY) || "{}"); } catch (e) { return {}; } }
+  function saveClipGroups(c) {
+    if (!c.repo) { RockyDB.putClips([c]); return; }
+    var over = loadOverrides();
+    over[c.id] = c.groups;
+    try { localStorage.setItem(OVERRIDE_KEY, JSON.stringify(over)); } catch (e) {}
+  }
+
+  // Groups named in the repo match a group of the same name in this browser, or show as a saved group.
+  function groupIdForName(name) {
+    var key = String(name).trim().toLowerCase();
+    var g = groups.filter(function (x) { return x.name.trim().toLowerCase() === key; })[0];
+    if (!g) { g = { id: "repo:" + String(name).trim(), name: String(name).trim(), repo: true }; groups.push(g); }
+    return g.id;
+  }
+  function savedClips(m) {
+    if (!m || !Array.isArray(m.clips)) return [];
+    (m.groups || []).forEach(groupIdForName);
+    var over = loadOverrides();
+    return m.clips.filter(function (c) { return c && c.file; }).map(function (c) {
+      var id = "repo:" + c.file;
+      return {
+        id: id,
+        name: c.name || prettyName(c.file),
+        src: "clips/" + encodeURI(c.file),
+        repo: true,
+        groups: over[id] || (c.groups || []).map(groupIdForName)
+      };
+    });
+  }
+  function loadSaved() {
+    return fetch("clips/clips.json", { cache: "no-cache" })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .catch(function () { return null; });
   }
 
   function activeGroup() { return groups.filter(function (g) { return g.id === active; })[0] || null; }
@@ -303,7 +349,7 @@
 
   function playClip(c, b) {
     stopClip();
-    if (!urls[c.id]) urls[c.id] = URL.createObjectURL(c.blob);
+    if (!urls[c.id]) urls[c.id] = c.src || URL.createObjectURL(c.blob);
     var a = new Audio(urls[c.id]);
     a.volume = Math.min(1, volEl.value / 100);
     clipAudio = a; clipPad = b;
@@ -328,11 +374,11 @@
       b.addEventListener("click", function () {
         if (inGroup(c, g)) c.groups = c.groups.filter(function (id) { return id !== g.id; });
         else c.groups.push(g.id);
-        RockyDB.putClips([c]);
+        saveClipGroups(c);
         render();
       });
     } else {
-      b.querySelector(".pad-key").textContent = "clip";
+      b.querySelector(".pad-key").textContent = c.repo ? "saved" : "this device";
       b.setAttribute("aria-label", "Play clip: " + c.name);
       b.addEventListener("click", function () { playClip(c, b); });
     }
@@ -370,11 +416,11 @@
 
     gbar.hidden = !g || formMode !== null || !gconfirm.hidden;
     if (g) {
-      $("gtitle").textContent = picking ? "Tap clips to add or remove" : g.name;
+      $("gtitle").textContent = picking ? "Tap clips to add or remove" : g.name + (g.repo ? " · saved in repo" : "");
       pickBtn.textContent = picking ? "Done" : "Choose clips";
       pickBtn.classList.toggle("primary", picking);
       pickBtn.hidden = !clips.length;
-      $("grename").hidden = $("gdelete").hidden = picking;
+      $("grename").hidden = $("gdelete").hidden = picking || !!g.repo;
     }
 
     var list = g && !picking ? clips.filter(function (c) { return inGroup(c, g); }) : clips;
@@ -384,7 +430,7 @@
     emptyEl.hidden = clips.length > 0;
     groupEmptyEl.hidden = !(g && clips.length && !list.length);
     if (g) groupEmptyEl.textContent = "No clips in " + g.name + " yet. Tap Choose clips to pick from your clips, or Add clips to add new files straight into this group.";
-    clearEl.hidden = !(active === "all" && clips.length);
+    clearEl.hidden = !(active === "all" && clips.some(function (c) { return !c.repo; }));
   }
 
   function hideForms() {
@@ -437,7 +483,11 @@
   $("gdelete-yes").addEventListener("click", function () {
     var id = active;
     groups = groups.filter(function (g) { return g.id !== id; });
-    clips.forEach(function (c) { c.groups = c.groups.filter(function (x) { return x !== id; }); });
+    clips.forEach(function (c) {
+      if (c.groups.indexOf(id) === -1) return;
+      c.groups = c.groups.filter(function (x) { return x !== id; });
+      if (c.repo) saveClipGroups(c);
+    });
     RockyDB.deleteGroup(id);
     setActive("all");
   });
@@ -458,18 +508,19 @@
   });
 
   clearEl.addEventListener("click", function () {
-    clips = [];
-    Object.keys(urls).forEach(function (k) { URL.revokeObjectURL(urls[k]); });
-    urls = {};
+    clips = clips.filter(function (c) { return c.repo; });
+    Object.keys(urls).forEach(function (k) { if (/^blob:/.test(urls[k])) { URL.revokeObjectURL(urls[k]); delete urls[k]; } });
     RockyDB.clearClips();
     render();
   });
 
   render();
-  Promise.all([RockyDB.clips(), RockyDB.groups()]).then(function (r) {
-    clips = r[0];
+  Promise.all([RockyDB.clips(), RockyDB.groups(), loadSaved()]).then(function (r) {
     groups = r[1];
+    clips = savedClips(r[2]).concat(r[0]);
     render();
   });
 })();
 </script>
+</body>
+</html>

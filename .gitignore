@@ -1,5 +1,8 @@
-# Audio clips and zips stay local; the pages read them in the browser.
+# Audio outside clips/ stays local. Clips meant for the site go in clips/ with clips/clips.json.
 *.zip
 *.mp3
 *.m4a
 *.wav
+!clips/*.mp3
+!clips/*.m4a
+!clips/*.wav
