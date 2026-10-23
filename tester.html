@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Rocky Clip Tester</title>
+<title>Rocky Add Clips</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -141,6 +141,23 @@
   }
   .keep[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 
+  /* One clip: a single card instead of the list. */
+  .one {
+    display: grid; grid-template-columns: 64px minmax(0, 1fr); align-items: center; gap: 14px;
+    background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 16px;
+  }
+  .one-play {
+    width: 64px; height: 64px; border-radius: 50%; padding: 0; cursor: pointer;
+    border: 0; background: var(--accent); color: var(--on-accent); display: grid; place-items: center;
+  }
+  .one-play::before { content: ""; border-style: solid; border-width: 11px 0 11px 17px; border-color: transparent transparent transparent currentColor; margin-left: 5px; }
+  .one.playing .one-play::before { border: 0; width: 18px; height: 18px; background: currentColor; margin: 0; }
+  .one-main { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+  .one-main b { font-family: var(--font-display); font-weight: 500; font-size: 18px; line-height: 1.25; overflow-wrap: anywhere; }
+  .one-main span { font-family: var(--font-mono); font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+  .one-prog { grid-column: 1 / -1; height: 3px; background: var(--rule); border-radius: 2px; overflow: hidden; }
+  .one-prog i { display: block; height: 100%; width: 0; background: var(--accent); }
+
   .empty { color: var(--muted); font-size: 14px; padding: 14px 0; margin: 0; }
 
   .send {
@@ -169,15 +186,21 @@
 <div class="wrap">
   <header>
     <a class="back" href="./">&larr; Rocky Board</a>
-    <h1>Clip Tester</h1>
-    <p class="lede">Open a zip of audio clips, listen through them, and keep the ones you like. Kept clips can go straight onto the board.</p>
+    <h1>Add Clips</h1>
+    <p class="lede">Open an audio file or a zip of clips. Listen first, then add the ones you want to the board.</p>
   </header>
 
   <section class="drop" id="drop" aria-label="Open clips">
-    <label class="btn" for="pick">Open zip or audio files</label>
+    <label class="btn" for="pick">Open audio files or a zip</label>
     <input id="pick" type="file" accept=".zip,application/zip,audio/*" multiple hidden>
-    <p>Or drag the zip onto this box. Files are read in this browser only. Nothing is uploaded.</p>
+    <p>Or drag them onto this box. Files are read in this browser only. Nothing is uploaded.</p>
     <div class="status" id="status" role="status"></div>
+  </section>
+
+  <section class="one" id="one" hidden aria-label="Your clip">
+    <button type="button" class="one-play" id="onePlay" aria-label="Play"></button>
+    <div class="one-main"><b id="oneName"></b><span id="oneMeta"></span></div>
+    <div class="one-prog" aria-hidden="true"><i id="oneProg"></i></div>
   </section>
 
   <div class="bar" id="bar" hidden>
@@ -200,7 +223,7 @@
   <p class="empty" id="none" hidden>No clips match.</p>
 
   <section class="send" id="send" hidden>
-    <h2>Send to the board</h2>
+    <h2>Add to the board</h2>
     <div class="send-row">
       <label class="small" for="dest">Add to</label>
       <select class="search" id="dest"></select>
@@ -215,7 +238,7 @@
     </div>
     <p class="hint" id="keepHint">Tap <b>Keep</b> on each clip you want first. Add kept clips turns on once at least one is kept.</p>
     <div class="status" id="sendStatus" role="status"></div>
-    <p class="note">To set up several people, keep one person's clips, add them to that person's group, tap Clear kept, then pick the next set. A clip can be in more than one group.</p>
+    <p class="note" id="multiTip">To set up several people, keep one person's clips, add them to that person's group, tap Clear kept, then pick the next set. A clip can be in more than one group.</p>
     <div class="repo">
       <h2>Save to the repo</h2>
       <p class="note">Clips saved in the repo's clips folder show up on the GitHub site on every device. This makes the upload for your kept clips, in the group picked above.</p>
@@ -304,7 +327,7 @@
       if (items.length === 1 && !items[0].kept) { items[0].kept = true; saveKept(); }
       stop();
       statusEl.textContent = !found.length ? "No audio files found in that selection." :
-        items.length === 1 ? "1 clip loaded and kept. Pick a group below, then Add kept clips." : items.length + " clips loaded.";
+        items.length === 1 ? "1 clip loaded. Play it, pick a group below, then Add this clip." : items.length + " clips loaded.";
       render();
     }).catch(function (err) {
       statusEl.textContent = "Couldn't read that file. " + (err && err.message ? err.message : "Try another zip.");
@@ -339,10 +362,22 @@
     var keptN = items.filter(function (it) { return it.kept; }).length;
     $("count").textContent = shown.length + " / " + items.length + " · " + keptN + " kept";
     $("none").hidden = !items.length || shown.length > 0;
-    $("bar").hidden = $("send").hidden = !items.length;
+    // A single clip gets a card instead of the list, and is always kept.
+    var single = items.length === 1;
+    if (single && !items[0].kept) { items[0].kept = true; saveKept(); keptN = 1; }
+    $("one").hidden = !single;
+    listEl.hidden = single;
+    if (single) {
+      $("oneName").textContent = items[0].name;
+      $("oneMeta").textContent = [fmt(items[0].dur), items[0].path.replace(/^.*\//, "")].filter(Boolean).join(" · ");
+      $("none").hidden = true;
+    }
+    $("send").hidden = !items.length;
+    $("bar").hidden = !items.length || single;
     $("add").disabled = $("unkeep").disabled = $("pack").disabled = keptN === 0;
-    $("keepHint").hidden = keptN > 0;
-    $("add").textContent = keptN ? "Add " + keptN + " kept clip" + (keptN === 1 ? "" : "s") : "Add kept clips";
+    $("unkeep").hidden = $("multiTip").hidden = single;
+    $("keepHint").hidden = keptN > 0 || single;
+    $("add").textContent = single ? "Add this clip" : keptN ? "Add " + keptN + " kept clip" + (keptN === 1 ? "" : "s") : "Add kept clips";
   }
 
   function rowFor(i) { return listEl.querySelector('.row[data-i="' + i + '"]'); }
@@ -357,6 +392,8 @@
       r.classList.add("current");
       if (!audio.paused) r.classList.add("playing");
     }
+    $("one").classList.toggle("playing", items.length === 1 && cur === 0 && !audio.paused);
+    if (audio.paused) $("oneProg").style.width = "0";
   }
 
   function stop() {
@@ -410,11 +447,14 @@
       it.dur = audio.duration;
       var r = rowFor(cur);
       if (r) r.querySelector("span").textContent = [fmt(it.dur), it.path.indexOf("/") !== -1 ? it.path.replace(/\/[^/]*$/, "") : ""].filter(Boolean).join(" · ");
+      if (items.length === 1) $("oneMeta").textContent = [fmt(it.dur), it.path.replace(/^.*\//, "")].filter(Boolean).join(" · ");
     }
   });
   audio.addEventListener("timeupdate", function () {
     var r = rowFor(cur);
-    if (r && audio.duration) r.querySelector(".prog").style.width = (audio.currentTime / audio.duration * 100) + "%";
+    var pct = audio.duration ? (audio.currentTime / audio.duration * 100) + "%" : "0";
+    if (r) r.querySelector(".prog").style.width = pct;
+    if (items.length === 1) $("oneProg").style.width = pct;
   });
   audio.addEventListener("ended", function () {
     markRows();
@@ -428,6 +468,8 @@
     if (e.target.closest(".keep")) toggleKeep(i);
     else if (e.target.closest(".play")) play(i);
   });
+
+  $("onePlay").addEventListener("click", function () { play(0); });
 
   vol.addEventListener("input", function () { audio.volume = vol.value / 100; });
   q.addEventListener("input", function () { render(); markRows(); });

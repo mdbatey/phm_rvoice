@@ -254,24 +254,6 @@
     display: flex; flex-direction: column; gap: 10px;
     background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 14px;
   }
-  .newlist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
-  .newlist li {
-    display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; align-items: center; gap: 12px;
-    padding-block: 10px; border-top: 1px solid var(--rule);
-  }
-  .np-play {
-    width: 40px; height: 40px; border-radius: 50%; padding: 0;
-    border: 1px solid var(--rule); background: var(--bg); color: var(--fg);
-    cursor: pointer; display: grid; place-items: center;
-  }
-  .np-play::before { content: ""; border-style: solid; border-width: 7px 0 7px 11px; border-color: transparent transparent transparent currentColor; margin-left: 3px; }
-  .newlist li.playing .np-play { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
-  .newlist li.playing .np-play::before { border: 0; width: 11px; height: 11px; background: currentColor; margin: 0; }
-  .np-main { min-width: 0; display: flex; flex-direction: column; gap: 8px; }
-  .np-name { font-weight: 500; overflow-wrap: anywhere; }
-  .np-groups { display: flex; flex-wrap: wrap; gap: 6px; }
-  .np-groups .chip { padding: 7px 11px; font-size: 13px; }
-  .np-play:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
   .ghpanel-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
   .ghpanel h3 { font-family: var(--font-display); font-weight: 500; font-size: 15px; margin: 0; }
   .ghrow { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -317,9 +299,7 @@
     <div class="mine-head">
       <h2 id="mine-h">Your clips</h2>
       <div class="mine-actions">
-        <label class="btn" for="files">Add clips</label>
-        <input id="files" type="file" accept="audio/*" multiple hidden>
-        <a class="btn ghost" href="tester.html">Test a batch</a>
+        <a class="btn" href="tester.html">Add clips</a>
         <button type="button" class="btn ghost" id="clear" hidden>Clear this device</button>
       </div>
     </div>
@@ -356,16 +336,7 @@
       <button type="button" class="gbtn primary" id="gdelete-yes">Delete group</button>
       <button type="button" class="gbtn" id="gdelete-no">Cancel</button>
     </div>
-    <div class="ghpanel newpanel" id="newpanel" hidden>
-      <div class="ghpanel-head">
-        <h3 id="new-title">Just added</h3>
-        <button type="button" class="gbtn primary" id="newdone">Done</button>
-      </div>
-      <p class="note">Play each clip, then tap the groups it belongs in.</p>
-      <ul class="newlist" id="newlist"></ul>
-      <p class="note">These are saved in this browser. To put them on GitHub for every device, use Test a batch, then Make upload.</p>
-    </div>
-    <p class="note" id="mine-empty">Pick audio files saved on your phone or computer, and each one becomes a pad named after its file. Have a whole zip? Use Test a batch to listen through it and send the keepers here. Clips you add here stay in this browser. Clips saved in the repo's clips folder show up everywhere, marked saved.</p>
+    <p class="note" id="mine-empty">Tap Add clips to open audio files or a zip, listen, and add the ones you want. Clips you add stay in this browser. Clips saved in the repo's clips folder show up everywhere, marked saved.</p>
     <p class="note" id="group-empty" hidden></p>
     <p class="note" id="dupe-note" role="status" hidden></p>
     <div class="grid" id="mygrid"></div>
@@ -391,12 +362,12 @@
   // ---- Clips and groups. Saved clips come from the repo's clips/clips.json; the rest live in this
   // browser's IndexedDB (clips-db.js). Group changes to saved clips are remembered in this browser only. ----
   function $(id) { return document.getElementById(id); }
-  var mygrid = $("mygrid"), filesEl = $("files"), clearEl = $("clear");
+  var mygrid = $("mygrid"), clearEl = $("clear");
   var emptyEl = $("mine-empty"), groupEmptyEl = $("group-empty"), chipsEl = $("chips");
   var gform = $("gform"), gname = $("gname"), gbar = $("gbar"), gconfirm = $("gconfirm"), pickBtn = $("gpick");
   var ACTIVE_KEY = "rocky-active-group";
   var clips = [], groups = [], active = "all", picking = false, formMode = null;
-  var urls = {}, clipAudio = null, clipPad = null, clipId = null, newIds = [];
+  var urls = {}, clipAudio = null, clipPad = null, clipId = null;
   try { active = localStorage.getItem(ACTIVE_KEY) || "all"; } catch (e) {}
 
   var prettyName = RockyDB.prettyName;
@@ -466,8 +437,7 @@
   // keepDucked: another clip is about to start, so leave the music down.
   function stopClip(keepDucked) {
     if (clipAudio) { clipAudio.pause(); clipAudio = null; }
-    // The same clip can be shown in the Just added panel and in the grid.
-    document.querySelectorAll(".newlist li.playing, #mygrid .pad.playing").forEach(function (el) {
+    document.querySelectorAll("#mygrid .pad.playing").forEach(function (el) {
       if (el !== musicPad) el.classList.remove("playing");
     });
     clipPad = null;
@@ -640,56 +610,6 @@
     chip("+ New group", null, null, function () { showForm("new"); }, "add");
   }
 
-  // Just added: each new clip with a play button and a toggle per group.
-  function renderNew() {
-    var list = newIds.map(function (id) { return clips.filter(function (c) { return c.id === id; })[0]; }).filter(Boolean);
-    $("newpanel").hidden = !list.length;
-    $("new-title").textContent = "Just added: " + list.length + " clip" + (list.length === 1 ? "" : "s");
-    var ul = $("newlist");
-    ul.innerHTML = "";
-    list.forEach(function (c) {
-      var li = document.createElement("li");
-      li.innerHTML = '<button type="button" class="np-play"></button><div class="np-main"><span class="np-name"></span><div class="np-groups"></div></div><span></span>';
-      li.querySelector(".np-name").textContent = c.name;
-      var play = li.querySelector(".np-play");
-      play.setAttribute("aria-label", "Play " + c.name);
-      play.addEventListener("click", function () { playClip(c, li); });
-      var box = li.querySelector(".np-groups");
-      if (!groups.length) box.innerHTML = '<span class="note">Make a group with + New group above.</span>';
-      groups.forEach(function (g) {
-        var b = document.createElement("button");
-        b.type = "button";
-        b.className = "chip";
-        b.textContent = g.name;
-        b.setAttribute("aria-pressed", inGroup(c, g) ? "true" : "false");
-        b.addEventListener("click", function () {
-          if (inGroup(c, g)) c.groups = c.groups.filter(function (id) { return id !== g.id; });
-          else c.groups.push(g.id);
-          saveClipGroups(c);
-          render();
-        });
-        box.appendChild(b);
-      });
-      if (!c.repo) {
-        var rm = document.createElement("button");
-        rm.type = "button";
-        rm.className = "gbtn";
-        rm.textContent = "Remove";
-        rm.setAttribute("aria-label", "Remove " + c.name);
-        rm.addEventListener("click", function () {
-          if (clipId === c.id) stopClip();
-          clips = clips.filter(function (x) { return x.id !== c.id; });
-          newIds = newIds.filter(function (id) { return id !== c.id; });
-          RockyDB.deleteClips([c.id]);
-          render();
-        });
-        li.replaceChild(rm, li.lastChild);
-      }
-      markPlaying(li, c);
-      ul.appendChild(li);
-    });
-  }
-
   function render() {
     if (clipAudio && !clips.some(function (c) { return c.id === clipId; })) stopClip();
     if (active !== "all" && !activeGroup()) active = "all";
@@ -708,7 +628,6 @@
     var list = g && !picking ? clips.filter(function (c) { return inGroup(c, g); }) : clips;
     if (clipPad) clipPad.classList.remove("playing");
     clipPad = null;
-    renderNew();
     mygrid.innerHTML = "";
     list.forEach(function (c) { mygrid.appendChild(makePad(c, g)); });
 
@@ -757,7 +676,7 @@
         savedInGroups + " saved clip" + (savedInGroups === 1 ? "" : "s") + " in them.";
       if (local.length) msg += " " + local.length + " clip" + (local.length === 1 ? " is" : "s are") +
         " in a group but only on this device, so " + (local.length === 1 ? "it" : "they") +
-        " won't be saved. Upload " + (local.length === 1 ? "it" : "them") + " with Test a batch, then Make upload, first.";
+        " won't be saved. Upload " + (local.length === 1 ? "it" : "them") + " with Add clips, then Make upload, first.";
       $("ghstatus").textContent = msg;
       $("ghdl").hidden = !CAN_DOWNLOAD;
     });
@@ -840,42 +759,8 @@
     setActive("all");
   });
 
-  // A file matching a clip already on the board isn't added twice; it just joins the open group.
-  filesEl.addEventListener("change", function () {
-    var byKey = {}, added = [], shown = [];
-    clips.forEach(function (c) { byKey[RockyDB.sameKey(c.name)] = c; });
-    Array.prototype.forEach.call(filesEl.files, function (f, i) {
-      var name = prettyName(f.name), have = byKey[RockyDB.sameKey(name)];
-      if (have) {
-        if (active !== "all" && have.groups.indexOf(active) === -1) { have.groups.push(active); saveClipGroups(have); }
-        if (shown.indexOf(have.id) === -1) shown.push(have.id);
-        return;
-      }
-      var c = {
-        id: (Date.now() + i) + "-" + Math.random().toString(36).slice(2),
-        name: name,
-        blob: f,
-        groups: active === "all" ? [] : [active]
-      };
-      byKey[RockyDB.sameKey(name)] = c;
-      added.push(c);
-      shown.push(c.id);
-    });
-    clips = clips.concat(added);
-    RockyDB.putClips(added);
-    filesEl.value = "";
-    newIds = shown;
-    hideForms();
-    picking = false;
-    render();
-    $("newpanel").scrollIntoView({ block: "nearest" });
-  });
-
-  $("newdone").addEventListener("click", function () { newIds = []; render(); });
-
   clearEl.addEventListener("click", function () {
     stopClip();
-    newIds = [];
     clips = clips.filter(function (c) { return c.repo; });
     Object.keys(urls).forEach(function (k) { if (/^blob:/.test(urls[k])) { URL.revokeObjectURL(urls[k]); delete urls[k]; } });
     RockyDB.clearClips();
