@@ -250,19 +250,24 @@
   .pick-play:focus-visible, .pick-toggle:focus-visible { outline: 3px solid var(--accent); outline-offset: -3px; }
 
   .ghopen { align-self: flex-start; }
-  /* Reorder: pads can be dragged; the arrows move one place. */
-  .pad.reorder { cursor: grab; touch-action: none; }
+  /* Reorder: drag a pad by its grip (top left). The rest of the pad scrolls the page as usual. */
+  .pad.reorder { cursor: default; }
+  .pad-lead { display: flex; align-items: center; gap: 8px; flex: none; }
   .pad.reorder .pad-key { font-variant-numeric: tabular-nums; }
-  .ord-row { display: flex; gap: 6px; }
-  .ord-btn {
-    flex: 1 1 0; appearance: none; font: 500 15px/1 var(--font-body);
-    padding: 8px 0; border-radius: 6px; border: 1px solid var(--rule);
-    background: var(--bg); color: var(--fg); cursor: pointer;
+  .pad.reorder .pad-groups { display: none; }
+  .grip {
+    appearance: none; width: 34px; height: 34px; padding: 0; flex: none;
+    display: grid; place-items: center;
+    border: 1px solid var(--rule); border-radius: 6px;
+    background: var(--bg); color: var(--muted);
+    cursor: grab; touch-action: none;
   }
-  .ord-btn:disabled { opacity: 0.35; cursor: default; }
-  .ord-btn:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
-  .sortable-ghost { opacity: 0.35; }
-  .sortable-chosen { border-color: var(--accent); }
+  .grip:hover { color: var(--fg); border-color: var(--accent); }
+  .grip:active { cursor: grabbing; }
+  .grip:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .grip svg { width: 14px; height: 20px; display: block; }
+  .sortable-ghost { opacity: 0.3; }
+  .sortable-drag { opacity: 0.95 !important; box-shadow: 0 10px 28px rgb(0 0 0 / 0.22); border-color: var(--accent); }
   .ghpanel {
     display: flex; flex-direction: column; gap: 10px;
     background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 14px;
@@ -468,29 +473,40 @@
   }
   function groupList(g) { return sortForGroup(clips.filter(function (c) { return inGroup(c, g); }), g); }
 
+  var GRIP_SVG = '<svg viewBox="0 0 14 20" aria-hidden="true">' +
+    [3, 10, 17].map(function (y) { return '<circle cx="4" cy="' + y + '" r="1.8" fill="currentColor"/><circle cx="10" cy="' + y + '" r="1.8" fill="currentColor"/>'; }).join("") +
+    "</svg>";
+
+  function moveInGroup(g, id, by) {
+    var ids = groupList(g).map(function (x) { return x.id; });
+    var j = ids.indexOf(id);
+    if (j + by < 0 || j + by >= ids.length) return;
+    ids.splice(j, 1);
+    ids.splice(j + by, 0, id);
+    setOrder(g, ids);
+    render();
+    var grip = mygrid.querySelector('.pad[data-id="' + CSS.escape(id) + '"] .grip');
+    if (grip) grip.focus();
+  }
+
+  // Reorder pad: drag by the six-dot grip, or focus the grip and use the arrow keys.
   function makeOrderPad(c, g, i, n) {
     var pad = document.createElement("div");
     pad.className = "pad reorder";
     pad.dataset.id = c.id;
-    pad.innerHTML = PAD_INNER.replace('<span class="pad-bars" aria-hidden="true"><i></i><i></i><i></i></span>', "") +
-      '<span class="ord-row"><button type="button" class="ord-btn" data-move="-1">\u25C0</button><button type="button" class="ord-btn" data-move="1">\u25B6</button></span>';
+    pad.innerHTML = PAD_INNER
+      .replace('<span class="pad-key"></span>', '<span class="pad-lead"><button type="button" class="grip">' + GRIP_SVG + '</button><span class="pad-key"></span></span>')
+      .replace('<span class="pad-bars" aria-hidden="true"><i></i><i></i><i></i></span>', "");
     pad.querySelector(".pad-text").textContent = c.name;
     pad.querySelector(".pad-key").textContent = (i + 1) + " of " + n;
     showGroupTags(pad, c);
-    pad.querySelectorAll(".ord-btn").forEach(function (b) {
-      var d = +b.dataset.move;
-      b.disabled = i + d < 0 || i + d >= n;
-      b.setAttribute("aria-label", (d < 0 ? "Move earlier: " : "Move later: ") + c.name);
-      b.addEventListener("click", function () {
-        var ids = groupList(g).map(function (x) { return x.id; });
-        var j = ids.indexOf(c.id);
-        ids.splice(j, 1);
-        ids.splice(j + d, 0, c.id);
-        setOrder(g, ids);
-        render();
-        var again = mygrid.querySelector('.pad[data-id="' + CSS.escape(c.id) + '"] .ord-btn[data-move="' + d + '"]');
-        if (again && !again.disabled) again.focus();
-      });
+    var grip = pad.querySelector(".grip");
+    grip.setAttribute("aria-label", "Move " + c.name + ", " + (i + 1) + " of " + n + ". Drag, or use the arrow keys.");
+    grip.addEventListener("keydown", function (e) {
+      var by = { ArrowUp: -1, ArrowLeft: -1, ArrowDown: 1, ArrowRight: 1 }[e.key];
+      if (!by) return;
+      e.preventDefault();
+      moveInGroup(g, c.id, by);
     });
     return pad;
   }
@@ -689,7 +705,7 @@
     gbar.hidden = !g || formMode !== null || !gconfirm.hidden;
     if (g) {
       $("gtitle").textContent = picking ? "Tap a clip to hear it, then add it" : g.name + (g.repo ? " · saved in repo" : "");
-      if (reordering) $("gtitle").textContent = "Drag clips, or use the arrows";
+      if (reordering) $("gtitle").textContent = "Drag a clip by its grip";
       pickBtn.textContent = picking ? "Done" : "Choose clips";
       pickBtn.classList.toggle("primary", picking);
       pickBtn.hidden = !clips.length || reordering;
@@ -708,11 +724,16 @@
       list.forEach(function (c, i) { mygrid.appendChild(makeOrderPad(c, g, i, list.length)); });
       if (window.Sortable) {
         sortable = Sortable.create(mygrid, {
+          handle: ".grip",
           animation: 150,
-          delay: 150,
-          delayOnTouchOnly: true,
-          filter: ".ord-btn",
-          preventOnFilter: false,
+          // The fallback drag (instead of the browser's own) behaves the same with mouse and touch,
+          // and lets the page auto-scroll near the top or bottom of the screen.
+          forceFallback: true,
+          fallbackTolerance: 3,
+          scroll: true,
+          bubbleScroll: true,
+          scrollSensitivity: 110,
+          scrollSpeed: 16,
           onEnd: function () {
             setOrder(g, Array.prototype.map.call(mygrid.children, function (el) { return el.dataset.id; }));
             render();
