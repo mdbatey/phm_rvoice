@@ -61,11 +61,30 @@ window.RockyDB = (function () {
     });
   }
 
+  // "I_mGladYouDidn_tDie_louder.mp3" -> "I'm Glad You Didn't Die (louder)"
+  function prettyName(path) {
+    var n = String(path).replace(/^.*\//, "").replace(/\.[^.]+$/, "");
+    var tags = [], m;
+    while ((m = n.match(/_(DeletedScene|louder)$/i))) {
+      tags.unshift(m[1].toLowerCase() === "deletedscene" ? "deleted scene" : "louder");
+      n = n.slice(0, -m[0].length);
+    }
+    n = n.replace(/([A-Za-z])_(m|t|s|re|ll|ve|d)(?![a-z])/g, "$1'$2")
+      .replace(/[_-]+/g, " ")
+      .replace(/([a-z'])([A-Z])/g, "$1 $2")
+      .replace(/([A-Z])([A-Z][a-z])/g, "$1 $2")
+      .replace(/([A-Za-z])(\d)/g, "$1 $2")
+      .replace(/\s+/g, " ")
+      .trim();
+    return n + tags.map(function (t) { return " (" + t + ")"; }).join("");
+  }
+
   function newId(prefix) { return prefix + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 
   return {
     open: open,
     newId: newId,
+    prettyName: prettyName,
     clips: function () {
       return all("clips").then(function (list) {
         list.forEach(function (c) { if (!c.groups) c.groups = []; });

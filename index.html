@@ -291,9 +291,7 @@
   var urls = {}, clipAudio = null, clipPad = null;
   try { active = localStorage.getItem(ACTIVE_KEY) || "all"; } catch (e) {}
 
-  function prettyName(n) {
-    return n.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
-  }
+  var prettyName = RockyDB.prettyName;
 
   function loadOverrides() { try { return JSON.parse(localStorage.getItem(OVERRIDE_KEY) || "{}"); } catch (e) { return {}; } }
   function saveClipGroups(c) {

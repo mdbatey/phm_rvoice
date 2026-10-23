@@ -250,9 +250,7 @@
   var $ = function (id) { return document.getElementById(id); };
   var listEl = $("list"), statusEl = $("status"), q = $("q"), vol = $("vol"), auto = $("auto");
 
-  function prettyName(n) {
-    return n.replace(/^.*\//, "").replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
-  }
+  var prettyName = RockyDB.prettyName;
   function ext(n) { var m = n.match(/\.([^.]+)$/); return m ? m[1].toLowerCase() : ""; }
   function fmt(s) { if (!isFinite(s)) return ""; s = Math.round(s); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); }
 
