@@ -485,7 +485,18 @@
     }
     try { localStorage.setItem(DEST_KEY, destEl.value === "__new" ? "" : destEl.value); } catch (e) {}
   });
-  RockyDB.groups().then(function (g) { groups = g; fillDest(); });
+  // Groups made in this browser plus the groups saved in the repo (same ids the board uses for them).
+  Promise.all([RockyDB.groups(), RockyDB.saved()]).then(function (r) {
+    groups = r[0];
+    var names = ((r[1] && r[1].groups) || []).slice();
+    ((r[1] && r[1].clips) || []).forEach(function (c) { (c.groups || []).forEach(function (n) { names.push(n); }); });
+    names.forEach(function (n) {
+      n = String(n).trim();
+      var k = n.toLowerCase();
+      if (n && !groups.some(function (g) { return g.name.trim().toLowerCase() === k; })) groups.push({ id: "repo:" + n, name: n, repo: true });
+    });
+    fillDest();
+  });
 
   $("unkeep").addEventListener("click", function () {
     items.forEach(function (it) { it.kept = false; });
