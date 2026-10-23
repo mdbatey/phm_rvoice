@@ -1,300 +1,423 @@
 {
-  "groups": [],
+  "groups": [
+    "Rocky",
+    "Grace",
+    "Mary",
+    "Eva"
+  ],
   "clips": [
     {
       "file": "AStaggeringWasteOfCarbon.mp3",
       "name": "A Staggering Waste Of Carbon",
-      "groups": []
+      "groups": [
+        "Eva"
+      ]
     },
     {
       "file": "AdrianIntro.mp3",
       "name": "Adrian Intro",
-      "groups": []
+      "groups": [
+        "Rocky"
+      ]
     },
     {
       "file": "AmISmart.mp3",
       "name": "Am I Smart",
-      "groups": []
+      "groups": [
+        "Grace"
+      ]
     },
     {
       "file": "AmazeAmazeAmaze.mp3",
       "name": "Amaze Amaze Amaze",
-      "groups": []
+      "groups": [
+        "Rocky"
+      ]
     },
     {
       "file": "ApologyApologyApology.mp3",
       "name": "Apology Apology Apology",
-      "groups": []
+      "groups": [
+        "Rocky"
+      ]
     },
     {
       "file": "Applause.mp3",
       "name": "Applause",
-      "groups": []
+      "groups": [
+        "Eva"
+      ]
     },
     {
       "file": "Applause_louder.mp3",
       "name": "Applause (louder)",
-      "groups": []
+      "groups": [
+        "Eva"
+      ]
     },
     {
       "file": "BlipA.mp3",
       "name": "Blip A",
-      "groups": []
+      "groups": [
+        "Mary"
+      ]
     },
     {
       "file": "BlipB.mp3",
       "name": "Blip B",
-      "groups": []
+      "groups": [
+        "Mary"
+      ]
     },
     {
       "file": "BlipC.mp3",
       "name": "Blip C",
-      "groups": []
+      "groups": [
+        "Mary"
+      ]
     },
     {
       "file": "BlipD.mp3",
       "name": "Blip D",
-      "groups": []
+      "groups": [
+        "Mary"
+      ]
     },
     {
       "file": "BodyMovementDetected.mp3",
       "name": "Body Movement Detected",
-      "groups": []
+      "groups": [
+        "Mary"
+      ]
     },
     {
       "file": "CognitionAssessment.mp3",
       "name": "Cognition Assessment",
-      "groups": []
+      "groups": [
+        "Mary"
+      ]
     },
     {
       "file": "DirtyDirtyDirty.mp3",
       "name": "Dirty Dirty Dirty",
-      "groups": []
+      "groups": [
+        "Rocky"
+      ]
     },
     {
       "file": "EngageSpinDrive.mp3",
       "name": "Engage Spin Drive",
-      "groups": []
+      "groups": [
+        "Mary"
+      ]
     },
     {
       "file": "EridianAstrophage.mp3",
       "name": "Eridian Astrophage",
-      "groups": []
+      "groups": [
+        "Rocky"
+      ]
     },
     {
       "file": "Eridian FistMyBump.mp3",
       "name": "Eridian Fist My Bump",
-      "groups": []
+      "groups": [
+        "Rocky"
+      ]
     },
     {
       "file": "EridianGoodbye.mp3",
       "name": "Eridian Goodbye",
-      "groups": []
+      "groups": [
+        "Rocky"
+      ]
     },
     {
       "file": "EridianGrace.mp3",
       "name": "Eridian Grace",
-      "groups": []
+      "groups": [
+        "Rocky"
+      ]
     },
     {
       "file": "Eridian One.mp3",
       "name": "Eridian One",
-      "groups": []
+      "groups": [
+        "Rocky"
+      ]
     },
     {
       "file": "Eridian Oxygen.mp3",
       "name": "Eridian Oxygen",
-      "groups": []
+      "groups": [
+        "Rocky"
+      ]
     },
     {
       "file": "Eridian Question.mp3",
       "name": "Eridian Question",
-      "groups": []
+      "groups": [
+        "Rocky"
+      ]
     },
     {
       "file": "Erratic_ManeuverDetected.mp3",
       "name": "Erratic Maneuver Detected",
-      "groups": []
+      "groups": [
+        "Mary"
+      ]
     },
     {
       "file": "EyeMovementDetected.mp3",
       "name": "Eye Movement Detected",
-      "groups": []
+      "groups": [
+        "Mary"
+      ]
     },
     {
       "file": "FistMyBump.mp3",
       "name": "Fist My Bump",
-      "groups": []
+      "groups": [
+        "Rocky"
+      ]
     },
     {
       "file": "FistMyBump_louder.mp3",
       "name": "Fist My Bump (louder)",
-      "groups": []
+      "groups": [
+        "Rocky"
+      ]
     },
     {
       "file": "GoodGoodGood.mp3",
       "name": "Good Good Good",
-      "groups": []
+      "groups": [
+        "Rocky"
+      ]
     },
     {
       "file": "GoodnightArmando_DeletedScene.mp3",
       "name": "Goodnight Armando (deleted scene)",
-      "groups": []
+      "groups": [
+        "Rocky"
+      ]
     },
     {
       "file": "Goodnight Grace_DeletedScene.mp3",
       "name": "Goodnight Grace (deleted scene)",
-      "groups": []
+      "groups": [
+        "Rocky"
+      ]
     },
     {
       "file": "GoodnightMary_DeletedScene.mp3",
       "name": "Goodnight Mary (deleted scene)",
-      "groups": []
+      "groups": [
+        "Grace"
+      ]
     },
     {
       "file": "Goodnight Rock_DeletedScene.mp3",
       "name": "Goodnight Rock (deleted scene)",
-      "groups": []
+      "groups": [
+        "Grace"
+      ]
     },
     {
       "file": "GraceRockyBoundaries.mp3",
       "name": "Grace Rocky Boundaries",
-      "groups": []
+      "groups": [
+        "Grace"
+      ]
     },
     {
       "file": "GraceRockySaveStars_DeletedScene.mp3",
       "name": "Grace Rocky Save Stars (deleted scene)",
-      "groups": []
+      "groups": [
+        "Rocky"
+      ]
     },
     {
       "file": "GraceScream.mp3",
       "name": "Grace Scream",
-      "groups": []
+      "groups": [
+        "Grace"
+      ]
     },
     {
       "file": "GraceShortScream.mp3",
       "name": "Grace Short Scream",
-      "groups": []
+      "groups": [
+        "Grace"
+      ]
     },
     {
       "file": "GrumpyAngryStupidHowLongSinceLastSleepQuestion.mp3",
       "name": "Grumpy Angry Stupid How Long Since Last Sleep Question",
-      "groups": []
+      "groups": [
+        "Rocky"
+      ]
     },
     {
       "file": "HaveGoodOtherLifeCrazySleep_DeletedScene.mp3",
       "name": "Have Good Other Life Crazy Sleep (deleted scene)",
-      "groups": []
+      "groups": [
+        "Rocky"
+      ]
     },
     {
       "file": "HelloEarth.mp3",
       "name": "Hello Earth",
-      "groups": []
+      "groups": [
+        "Rocky"
+      ]
     },
     {
       "file": "HiGrace.mp3",
       "name": "Hi Grace",
-      "groups": []
+      "groups": [
+        "Rocky"
+      ]
     },
     {
       "file": "HighFiveHighThree_DeletedScene.mp3",
       "name": "High Five High Three (deleted scene)",
-      "groups": []
+      "groups": [
+        "Grace"
+      ]
     },
     {
       "file": "ISeeGrace.mp3",
       "name": "I See Grace",
-      "groups": []
+      "groups": [
+        "Rocky"
+      ]
     },
     {
       "file": "IThinkThisThingsBroken.mp3",
       "name": "I Think This Things Broken",
-      "groups": []
+      "groups": [
+        "Grace"
+      ]
     },
     {
       "file": "I_mGladYouDidn_tDie.mp3",
       "name": "I'm Glad You Didn't Die",
-      "groups": []
+      "groups": [
+        "Eva"
+      ]
     },
     {
       "file": "I_mHereBuddy.mp3",
       "name": "I'm Here Buddy",
-      "groups": []
+      "groups": [
+        "Grace"
+      ]
     },
     {
       "file": "I_mNotThePilot.mp3",
       "name": "I'm Not The Pilot",
-      "groups": []
+      "groups": [
+        "Grace"
+      ]
     },
     {
       "file": "Incorrect.mp3",
       "name": "Incorrect",
-      "groups": []
+      "groups": [
+        "Mary"
+      ]
     },
     {
       "file": "IsFullGood.mp3",
       "name": "Is Full Good",
-      "groups": []
+      "groups": [
+        "Rocky"
+      ]
     },
     {
       "file": "IsFullGood_louder.mp3",
       "name": "Is Full Good (louder)",
-      "groups": []
+      "groups": [
+        "Rocky"
+      ]
     },
     {
       "file": "ItIsTimeGo.mp3",
       "name": "It Is Time Go",
-      "groups": []
+      "groups": [
+        "Rocky"
+      ]
     },
     {
       "file": "ItIsTimeGo_louder.mp3",
       "name": "It Is Time Go (louder)",
-      "groups": []
+      "groups": [
+        "Rocky"
+      ]
     },
     {
       "file": "ItLookBeautiful.mp3",
       "name": "It Look Beautiful",
-      "groups": []
+      "groups": [
+        "Rocky"
+      ]
     },
     {
       "file": "It_sASmallToMediumWhoop.mp3",
       "name": "It's A Small To Medium Whoop",
-      "groups": []
+      "groups": [
+        "Grace"
+      ]
     },
     {
       "file": "It_sSendingMeSomething.mp3",
       "name": "It's Sending Me Something",
-      "groups": []
+      "groups": [
+        "Grace"
+      ]
     },
     {
       "file": "It_sTimeToGoToSleepOkay_DeletedScene.mp3",
       "name": "It's Time To Go To Sleep Okay (deleted scene)",
-      "groups": []
+      "groups": [
+        "Grace"
+      ]
     },
     {
       "file": "KnockKnock.mp3",
       "name": "Knock Knock",
-      "groups": []
+      "groups": [
+        "Eva"
+      ]
     },
     {
       "file": "Let_sGoMary.mp3",
       "name": "Let's Go Mary",
-      "groups": []
+      "groups": [
+        "Grace"
+      ]
     },
     {
       "file": "Let_sPackThisUP.mp3",
       "name": "Let's Pack This Up",
-      "groups": []
+      "groups": [
+        "Eva"
+      ]
     },
     {
       "file": "LifeIsReason.mp3",
       "name": "Life Is Reason",
-      "groups": []
+      "groups": [
+        "Rocky"
+      ]
     },
     {
       "file": "Movement Detected.mp3",
       "name": "Movement Detected",
-      "groups": []
+      "groups": [
+        "Mary"
+      ]
     },
     {
       "file": "Music-AmazeAmazeAmaze.mp3",
@@ -304,172 +427,240 @@
     {
       "file": "NoDoPuppetShow.mp3",
       "name": "No Do Puppet Show",
-      "groups": []
+      "groups": [
+        "Rocky"
+      ]
     },
     {
       "file": "NoUnderstandWord.mp3",
       "name": "No Understand Word",
-      "groups": []
+      "groups": [
+        "Rocky"
+      ]
     },
     {
       "file": "NotGoodAtJokes.mp3",
       "name": "Not Good At Jokes",
-      "groups": []
+      "groups": [
+        "Eva"
+      ]
     },
     {
       "file": "NotThePilot.mp3",
       "name": "Not The Pilot",
-      "groups": []
+      "groups": [
+        "Grace"
+      ]
     },
     {
       "file": "NothingAboutThisIsSafe.mp3",
       "name": "Nothing About This Is Safe",
-      "groups": []
+      "groups": [
+        "Eva"
+      ]
     },
     {
       "file": "NothingHappened.mp3",
       "name": "Nothing Happened",
-      "groups": []
+      "groups": [
+        "Grace"
+      ]
     },
     {
       "file": "OhHurryHurry.mp3",
       "name": "Oh Hurry Hurry",
-      "groups": []
+      "groups": [
+        "Rocky"
+      ]
     },
     {
       "file": "OhItDied.mp3",
       "name": "Oh It Died",
-      "groups": []
+      "groups": [
+        "Grace"
+      ]
     },
     {
       "file": "OhNo.mp3",
       "name": "Oh No",
-      "groups": []
+      "groups": [
+        "Grace"
+      ]
     },
     {
       "file": "OhUnderstand.mp3",
       "name": "Oh Understand",
-      "groups": []
+      "groups": [
+        "Rocky"
+      ]
     },
     {
       "file": "PilotDetected.mp3",
       "name": "Pilot Detected",
-      "groups": []
+      "groups": [
+        "Mary"
+      ]
     },
     {
       "file": "PilotDetected_louder.mp3",
       "name": "Pilot Detected (louder)",
-      "groups": []
+      "groups": [
+        "Mary"
+      ]
     },
     {
       "file": "PilotDetected2.mp3",
       "name": "Pilot Detected 2",
-      "groups": []
+      "groups": [
+        "Mary"
+      ]
     },
     {
       "file": "PleaseEngageRestraints.mp3",
       "name": "Please Engage Restraints",
-      "groups": []
+      "groups": [
+        "Mary"
+      ]
     },
     {
       "file": "RockyBoundaries.mp3",
       "name": "Rocky Boundaries",
-      "groups": []
+      "groups": [
+        "Rocky"
+      ]
     },
     {
       "file": "RockyFix.mp3",
       "name": "Rocky Fix",
-      "groups": []
+      "groups": [
+        "Rocky"
+      ]
     },
     {
       "file": "RockyHateMark.mp3",
       "name": "Rocky Hate Mark",
-      "groups": []
+      "groups": [
+        "Rocky"
+      ]
     },
     {
       "file": "RockyIntro.mp3",
       "name": "Rocky Intro",
-      "groups": []
+      "groups": [
+        "Rocky"
+      ]
     },
     {
       "file": "RockyJazzHands.mp3",
       "name": "Rocky Jazz Hands",
-      "groups": []
+      "groups": [
+        "Rocky"
+      ]
     },
     {
       "file": "SaveEarthSaveEridGoHome_DeletedScene.mp3",
       "name": "Save Earth Save Erid Go Home (deleted scene)",
-      "groups": []
+      "groups": [
+        "Rocky"
+      ]
     },
     {
       "file": "SoWhatWeDoNow.mp3",
       "name": "So What We Do Now",
-      "groups": []
+      "groups": [
+        "Rocky"
+      ]
     },
     {
       "file": "TheConsensusHereIsThatItWouldBePreferableIfYouDidNotDie.mp3",
       "name": "The Consensus Here Is That It Would Be Preferable If You Did Not Die",
-      "groups": []
+      "groups": [
+        "Eva"
+      ]
     },
     {
       "file": "TheyThinkI_mDumb.mp3",
       "name": "They Think I'm Dumb",
-      "groups": []
+      "groups": [
+        "Grace"
+      ]
     },
     {
       "file": "TheyTootToScootBasically.mp3",
       "name": "They Toot To Scoot Basically",
-      "groups": []
+      "groups": [
+        "Grace"
+      ]
     },
     {
       "file": "ThisRoomBoring.mp3",
       "name": "This Room Boring",
-      "groups": []
+      "groups": [
+        "Rocky"
+      ]
     },
     {
       "file": "ThisRoomForGarbage.mp3",
       "name": "This Room For Garbage",
-      "groups": []
+      "groups": [
+        "Rocky"
+      ]
     },
     {
       "file": "ThumbsUpBaby.mp3",
       "name": "Thumbs Up Baby",
-      "groups": []
+      "groups": [
+        "Rocky"
+      ]
     },
     {
       "file": "WelcomeToTheHailMary.mp3",
       "name": "Welcome To The Hail Mary",
-      "groups": []
+      "groups": [
+        "Mary"
+      ]
     },
     {
       "file": "WhoAreYouTalkingTo.mp3",
       "name": "Who Are You Talking To",
-      "groups": []
+      "groups": [
+        "Rocky"
+      ]
     },
     {
       "file": "WordsOfEncouragement.mp3",
       "name": "Words Of Encouragement",
-      "groups": []
+      "groups": [
+        "Rocky"
+      ]
     },
     {
       "file": "WordsOfEncouragement_louder.mp3",
       "name": "Words Of Encouragement (louder)",
-      "groups": []
+      "groups": [
+        "Rocky"
+      ]
     },
     {
       "file": "WordsOfGreatEncouragement.mp3",
       "name": "Words Of Great Encouragement",
-      "groups": []
+      "groups": [
+        "Rocky"
+      ]
     },
     {
       "file": "WordsOfGreatEncouragement_louder.mp3",
       "name": "Words Of Great Encouragement (louder)",
-      "groups": []
+      "groups": [
+        "Rocky"
+      ]
     },
     {
       "file": "You_reSmartYou_llFigureItOut.mp3",
       "name": "You're Smart You'll Figure It Out",
-      "groups": []
+      "groups": [
+        "Eva"
+      ]
     }
   ]
 }
