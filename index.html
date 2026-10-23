@@ -228,13 +228,7 @@
   .pick-toggle[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); border-top-color: var(--accent); }
   .pick-play:focus-visible, .pick-toggle:focus-visible { outline: 3px solid var(--accent); outline-offset: -3px; }
 
-  .linkbtn {
-    align-self: flex-start; appearance: none; border: 0; background: none; padding: 2px 0;
-    font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase;
-    color: var(--accent); cursor: pointer;
-  }
-  .linkbtn:hover { text-decoration: underline; }
-  .linkbtn:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .ghopen { align-self: flex-start; }
   .ghpanel {
     display: flex; flex-direction: column; gap: 10px;
     background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 14px;
@@ -282,7 +276,7 @@
       </div>
     </div>
     <div class="chips" id="chips" role="group" aria-label="Clip groups"></div>
-    <button type="button" class="linkbtn" id="ghopen" hidden>Save groups to GitHub</button>
+    <button type="button" class="gbtn ghopen" id="ghopen" hidden>Save groups to GitHub</button>
     <div class="ghpanel" id="ghpanel" hidden>
       <div class="ghpanel-head">
         <h3>Save groups to GitHub</h3>
@@ -307,6 +301,7 @@
       <button type="button" class="gbtn" id="gpick">Choose clips</button>
       <button type="button" class="gbtn" id="grename">Rename</button>
       <button type="button" class="gbtn" id="gdelete">Delete</button>
+      <button type="button" class="gbtn primary" id="ghopen2">Save to GitHub</button>
     </div>
     <div class="gbar" id="gconfirm" hidden>
       <span class="gname" id="gconfirm-text"></span>
@@ -520,7 +515,9 @@
     groupEmptyEl.hidden = !(g && clips.length && !list.length);
     if (g) groupEmptyEl.textContent = "No clips in " + g.name + " yet. Tap Choose clips to pick from your clips, or Add clips to add new files straight into this group.";
     clearEl.hidden = !(active === "all" && clips.some(function (c) { return !c.repo; }));
-    $("ghopen").hidden = !groups.length || !clips.some(function (c) { return c.repo; }) || !$("ghpanel").hidden;
+    // In the All clips view the button sits under the group chips; with a group open it's in the group's bar.
+    $("ghopen").hidden = !groups.length || !!g || !$("ghpanel").hidden;
+    $("ghopen2").hidden = picking || !$("ghpanel").hidden;
   }
 
   // ---- Save groups to GitHub: the repo's clips.json with each saved clip's groups as they are on this board ----
@@ -534,7 +531,7 @@
 
   function openGh() {
     $("ghpanel").hidden = false;
-    $("ghopen").hidden = true;
+    $("ghopen").hidden = $("ghopen2").hidden = true;
     $("ghstatus").textContent = "Reading the repo's current list…";
     RockyDB.saved().then(function (m) {
       m = m || { groups: [], clips: [] };
@@ -554,7 +551,9 @@
       ghStep("Tap <b>Open clips.json on GitHub</b>. It opens the editor; you may need to sign in.");
       ghStep("Select everything in the editor, paste over it, and tap <b>Commit changes</b>. The site updates in a minute or two.");
       var local = clips.filter(function (c) { return !c.repo && c.groups.length; });
-      var msg = groups.length + " group" + (groups.length === 1 ? "" : "s") + " ready to save.";
+      var savedInGroups = clips.filter(function (c) { return c.repo && c.groups.length; }).length;
+      var msg = groups.length + " group" + (groups.length === 1 ? "" : "s") + " ready to save, with " +
+        savedInGroups + " saved clip" + (savedInGroups === 1 ? "" : "s") + " in them.";
       if (local.length) msg += " " + local.length + " clip" + (local.length === 1 ? " is" : "s are") +
         " in a group but only on this device, so " + (local.length === 1 ? "it" : "they") +
         " won't be saved. Upload " + (local.length === 1 ? "it" : "them") + " with Test a batch, then Make upload, first.";
@@ -563,6 +562,7 @@
     });
   }
   $("ghopen").addEventListener("click", openGh);
+  $("ghopen2").addEventListener("click", openGh);
   $("ghclose").addEventListener("click", function () { $("ghpanel").hidden = true; render(); });
   $("ghcopy").addEventListener("click", function () {
     var t = $("ghjson");
