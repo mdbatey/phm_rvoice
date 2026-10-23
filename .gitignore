@@ -1,0 +1,5 @@
+# Audio clips and zips stay local; the pages read them in the browser.
+*.zip
+*.mp3
+*.m4a
+*.wav

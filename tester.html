@@ -1,0 +1,481 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Rocky Clip Tester</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600&family=Unbounded:wght@500;700&display=swap">
+<style>
+  /* Layout: same 560px column as the board. Loader, a sticky filter bar, a long list of clip rows, a send-to-board footer. */
+  :root {
+    --bg: #e3e4e1;
+    --surface: #f2f3f0;
+    --fg: #1b2124;
+    --muted: #5d676b;
+    --rule: #c6c9c5;
+    --accent: #c4701a;
+    --on-accent: #fff8ee;
+    --font-display: "Unbounded", "Arial Black", system-ui, sans-serif;
+    --font-body: "DM Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-mono: "DM Mono", ui-monospace, "SF Mono", Menlo, monospace;
+    color-scheme: light;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #13171a; --surface: #1d2327; --fg: #e7e9e6; --muted: #8d989c;
+      --rule: #2f3a3f; --accent: #f0a23c; --on-accent: #1a1204;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #13171a; --surface: #1d2327; --fg: #e7e9e6; --muted: #8d989c;
+    --rule: #2f3a3f; --accent: #f0a23c; --on-accent: #1a1204;
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-body);
+    font-size: 16px;
+    line-height: 1.45;
+    padding-block: 28px 40px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  body::before {
+    content: ""; position: fixed; inset: 0 0 auto;
+    height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg);
+  }
+  .wrap { max-width: 560px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+
+  header { display: flex; flex-direction: column; gap: 8px; }
+  .back { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); text-decoration: none; align-self: flex-start; }
+  .back:hover { color: var(--accent); }
+  h1 {
+    font-family: var(--font-display); font-weight: 700;
+    font-size: clamp(30px, 9vw, 44px); line-height: 1; letter-spacing: -0.02em;
+    margin: 0; text-wrap: balance;
+  }
+  .lede { margin: 0; color: var(--muted); max-width: 48ch; }
+
+  .drop {
+    border: 1.5px dashed var(--rule);
+    border-radius: 6px;
+    background: var(--surface);
+    padding: 20px 16px;
+    display: flex; flex-direction: column; align-items: flex-start; gap: 10px;
+    transition: border-color 0.12s;
+  }
+  .drop.over { border-color: var(--accent); }
+  .drop p { margin: 0; color: var(--muted); font-size: 14px; }
+  .status { font-family: var(--font-mono); font-size: 12px; color: var(--muted); min-height: 1.2em; }
+
+  .btn {
+    font: 500 14px/1 var(--font-body);
+    padding: 10px 14px; border-radius: 6px;
+    border: 1px solid var(--accent); background: var(--accent); color: var(--on-accent);
+    cursor: pointer; text-decoration: none; display: inline-block;
+  }
+  .btn.ghost { background: transparent; color: var(--fg); border-color: var(--rule); }
+  .btn:disabled { opacity: 0.45; cursor: default; }
+  .btn:focus-visible, .drop label:focus-within, button:focus-visible, input:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+  .bar {
+    position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5;
+    background: var(--bg);
+    display: flex; flex-direction: column; gap: 10px;
+    padding-block: 10px; border-bottom: 1px solid var(--rule);
+  }
+  .bar-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .search {
+    flex: 1 1 180px; min-width: 0;
+    font: 15px var(--font-body); color: var(--fg);
+    background: var(--surface); border: 1px solid var(--rule); border-radius: 6px;
+    padding: 9px 11px;
+  }
+  .seg { display: flex; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
+  .seg button {
+    font: 500 13px/1 var(--font-body); padding: 9px 12px;
+    background: transparent; color: var(--fg); border: 0; cursor: pointer;
+  }
+  .seg button[aria-pressed="true"] { background: var(--fg); color: var(--bg); }
+  .small { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+  .toggle { display: flex; align-items: center; gap: 6px; cursor: pointer; white-space: nowrap; }
+  .toggle input { accent-color: var(--accent); width: 18px; height: 18px; margin: 0; }
+  input[type="range"] { flex: 1 1 100px; min-width: 0; accent-color: var(--accent); }
+  .count { margin-left: auto; font-variant-numeric: tabular-nums; }
+
+  ol.list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+  .row {
+    position: relative;
+    display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; align-items: center; gap: 12px;
+    padding: 8px 4px; border-bottom: 1px solid var(--rule);
+  }
+  .row.current { background: var(--surface); }
+  .row .prog { position: absolute; left: 0; bottom: -1px; height: 2px; background: var(--accent); width: 0; }
+  .play {
+    width: 40px; height: 40px; border-radius: 50%;
+    border: 1px solid var(--rule); background: var(--surface); color: var(--fg);
+    cursor: pointer; display: grid; place-items: center; padding: 0;
+  }
+  .play::before { content: ""; border-style: solid; border-width: 7px 0 7px 11px; border-color: transparent transparent transparent currentColor; margin-left: 3px; }
+  .row.playing .play { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+  .row.playing .play::before { border: 0; width: 11px; height: 11px; background: currentColor; margin: 0; }
+  .name { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .name b { font-weight: 500; overflow-wrap: anywhere; line-height: 1.3; }
+  .name span { font-family: var(--font-mono); font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+  .keep {
+    font: 500 13px/1 var(--font-body);
+    padding: 8px 11px; border-radius: 6px;
+    border: 1px solid var(--rule); background: transparent; color: var(--muted);
+    cursor: pointer; white-space: nowrap;
+  }
+  .keep[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+
+  .empty { color: var(--muted); font-size: 14px; padding: 14px 0; margin: 0; }
+
+  .send {
+    display: flex; flex-direction: column; gap: 10px;
+    padding-top: 6px; border-top: 1px solid var(--rule);
+  }
+  .send h2 { font-family: var(--font-display); font-weight: 500; font-size: 18px; margin: 0; }
+  .send-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .note { margin: 0; font-size: 13px; color: var(--muted); max-width: 54ch; }
+  kbd { font-family: var(--font-mono); font-size: 12px; border: 1px solid var(--rule); border-radius: 3px; padding: 0 4px; }
+
+  @media (prefers-reduced-motion: reduce) { .drop { transition: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <a class="back" href="./">&larr; Rocky Board</a>
+    <h1>Clip Tester</h1>
+    <p class="lede">Open a zip of audio clips, listen through them, and keep the ones you like. Kept clips can go straight onto the board.</p>
+  </header>
+
+  <section class="drop" id="drop" aria-label="Open clips">
+    <label class="btn" for="pick">Open zip or audio files</label>
+    <input id="pick" type="file" accept=".zip,application/zip,audio/*" multiple hidden>
+    <p>Or drag the zip onto this box. Files are read in this browser only. Nothing is uploaded.</p>
+    <div class="status" id="status" role="status"></div>
+  </section>
+
+  <div class="bar" id="bar" hidden>
+    <div class="bar-row">
+      <input class="search" id="q" type="search" placeholder="Filter by name" aria-label="Filter clips by name">
+      <div class="seg" role="group" aria-label="Show">
+        <button type="button" id="f-all" aria-pressed="true">All</button>
+        <button type="button" id="f-kept" aria-pressed="false">Kept</button>
+      </div>
+    </div>
+    <div class="bar-row">
+      <label class="small" for="vol">Vol</label>
+      <input id="vol" type="range" min="0" max="100" value="80">
+      <label class="toggle small" for="auto"><input id="auto" type="checkbox"> Play next</label>
+      <span class="small count" id="count"></span>
+    </div>
+  </div>
+
+  <ol class="list" id="list" aria-label="Clips"></ol>
+  <p class="empty" id="none" hidden>No clips match.</p>
+
+  <section class="send" id="send" hidden>
+    <h2>Send to the board</h2>
+    <div class="send-row">
+      <button type="button" class="btn" id="add" disabled>Add kept clips</button>
+      <a class="btn ghost" href="./">Open the board</a>
+    </div>
+    <div class="status" id="sendStatus" role="status"></div>
+    <p class="note">Keys: <kbd>Space</kbd> play or stop, <kbd>&darr;</kbd> <kbd>&uarr;</kbd> next and previous, <kbd>K</kbd> keep. Clips you add are saved in this browser's copy of the board, the same place as "Your clips".</p>
+  </section>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+(function () {
+  var AUDIO_RE = /\.(mp3|m4a|aac|wav|ogg|oga|opus|flac|webm)$/i;
+  var MIME = { mp3: "audio/mpeg", m4a: "audio/mp4", aac: "audio/aac", wav: "audio/wav", ogg: "audio/ogg", oga: "audio/ogg", opus: "audio/ogg", flac: "audio/flac", webm: "audio/webm" };
+  var KEPT_KEY = "rocky-tester-kept";
+
+  var items = [];      // { path, name, get(), blob, url, dur, kept }
+  var shown = [];      // indexes into items, in display order
+  var cur = -1;
+  var filter = "all";
+  var audio = new Audio();
+
+  var $ = function (id) { return document.getElementById(id); };
+  var listEl = $("list"), statusEl = $("status"), q = $("q"), vol = $("vol"), auto = $("auto");
+
+  function prettyName(n) {
+    return n.replace(/^.*\//, "").replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
+  }
+  function ext(n) { var m = n.match(/\.([^.]+)$/); return m ? m[1].toLowerCase() : ""; }
+  function fmt(s) { if (!isFinite(s)) return ""; s = Math.round(s); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); }
+
+  function loadKept() { try { return JSON.parse(localStorage.getItem(KEPT_KEY) || "[]"); } catch (e) { return []; } }
+  function saveKept() {
+    try { localStorage.setItem(KEPT_KEY, JSON.stringify(items.filter(function (it) { return it.kept; }).map(function (it) { return it.path; }))); } catch (e) {}
+  }
+
+  function blobFor(it) {
+    if (it.blob) return Promise.resolve(it.blob);
+    return it.get().then(function (b) {
+      it.blob = b.type ? b : new Blob([b], { type: MIME[ext(it.path)] || "audio/mpeg" });
+      return it.blob;
+    });
+  }
+
+  function addFiles(fileList) {
+    var files = Array.prototype.slice.call(fileList);
+    if (!files.length) return;
+    statusEl.textContent = "Reading…";
+    var found = [];
+    var jobs = files.map(function (f) {
+      if (/\.zip$/i.test(f.name) || f.type === "application/zip") {
+        if (!window.JSZip) return Promise.reject(new Error("The zip reader didn't load. Check your connection and reload the page."));
+        return JSZip.loadAsync(f).then(function (zip) {
+          zip.forEach(function (path, entry) {
+            if (entry.dir || !AUDIO_RE.test(path) || /(^|\/)(__MACOSX\/|\.)/.test(path)) return;
+            found.push({ path: path, get: function () { return entry.async("blob"); } });
+          });
+        });
+      }
+      if (AUDIO_RE.test(f.name) || /^audio\//.test(f.type)) {
+        found.push({ path: f.name, get: function () { return Promise.resolve(f); }, blob: f });
+      }
+      return Promise.resolve();
+    });
+    Promise.all(jobs).then(function () {
+      var kept = loadKept();
+      var have = {};
+      items.forEach(function (it) { have[it.path] = true; });
+      found.forEach(function (it) {
+        if (have[it.path]) return;
+        it.name = prettyName(it.path);
+        it.kept = kept.indexOf(it.path) !== -1;
+        items.push(it);
+      });
+      items.sort(function (a, b) { return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }); });
+      stop();
+      statusEl.textContent = found.length ? items.length + " clips loaded." : "No audio files found in that selection.";
+      render();
+    }).catch(function (err) {
+      statusEl.textContent = "Couldn't read that file. " + (err && err.message ? err.message : "Try another zip.");
+    });
+  }
+
+  function render() {
+    var term = q.value.trim().toLowerCase();
+    shown = [];
+    items.forEach(function (it, i) {
+      if (filter === "kept" && !it.kept) return;
+      if (term && it.name.toLowerCase().indexOf(term) === -1) return;
+      shown.push(i);
+    });
+    listEl.innerHTML = "";
+    var frag = document.createDocumentFragment();
+    shown.forEach(function (i) {
+      var it = items[i];
+      var li = document.createElement("li");
+      li.className = "row" + (i === cur ? " current" + (audio.paused ? "" : " playing") : "");
+      li.dataset.i = i;
+      li.innerHTML = '<button type="button" class="play"></button><div class="name"><b></b><span></span></div><button type="button" class="keep"></button><div class="prog"></div>';
+      li.querySelector(".play").setAttribute("aria-label", "Play " + it.name);
+      li.querySelector("b").textContent = it.name;
+      li.querySelector("span").textContent = [fmt(it.dur), it.path.indexOf("/") !== -1 ? it.path.replace(/\/[^/]*$/, "") : ""].filter(Boolean).join(" · ");
+      var k = li.querySelector(".keep");
+      k.textContent = it.kept ? "Kept" : "Keep";
+      k.setAttribute("aria-pressed", it.kept ? "true" : "false");
+      frag.appendChild(li);
+    });
+    listEl.appendChild(frag);
+    var keptN = items.filter(function (it) { return it.kept; }).length;
+    $("count").textContent = shown.length + " / " + items.length + " · " + keptN + " kept";
+    $("none").hidden = !items.length || shown.length > 0;
+    $("bar").hidden = $("send").hidden = !items.length;
+    $("add").disabled = keptN === 0;
+    $("add").textContent = keptN ? "Add " + keptN + " kept clip" + (keptN === 1 ? "" : "s") : "Add kept clips";
+  }
+
+  function rowFor(i) { return listEl.querySelector('.row[data-i="' + i + '"]'); }
+
+  function markRows() {
+    listEl.querySelectorAll(".row.current").forEach(function (r) {
+      r.classList.remove("current", "playing");
+      r.querySelector(".prog").style.width = "0";
+    });
+    var r = rowFor(cur);
+    if (r) {
+      r.classList.add("current");
+      if (!audio.paused) r.classList.add("playing");
+    }
+  }
+
+  function stop() {
+    audio.pause();
+    markRows();
+  }
+
+  function play(i) {
+    if (i < 0 || i >= items.length) return;
+    if (i === cur && !audio.paused) { stop(); return; }
+    var it = items[i];
+    cur = i;
+    blobFor(it).then(function (b) {
+      if (cur !== i) return;
+      if (!it.url) it.url = URL.createObjectURL(b);
+      if (audio.src !== it.url) audio.src = it.url;
+      else audio.currentTime = 0;
+      audio.volume = vol.value / 100;
+      return audio.play();
+    }).then(markRows).catch(function () {
+      statusEl.textContent = "Couldn't play " + it.name + ". The file may be damaged or in a format this browser can't play.";
+      markRows();
+    });
+    markRows();
+    var r = rowFor(i);
+    if (r) r.scrollIntoView({ block: "nearest" });
+  }
+
+  function step(dir) {
+    if (!shown.length) return;
+    var pos = shown.indexOf(cur);
+    var next = pos === -1 ? (dir > 0 ? 0 : shown.length - 1) : pos + dir;
+    if (next < 0 || next >= shown.length) return;
+    play(shown[next]);
+  }
+
+  function toggleKeep(i) {
+    var it = items[i];
+    if (!it) return;
+    it.kept = !it.kept;
+    saveKept();
+    var pos = window.scrollY;
+    render();
+    markRows();
+    window.scrollTo(0, pos);
+  }
+
+  audio.addEventListener("loadedmetadata", function () {
+    var it = items[cur];
+    if (it && !it.dur) {
+      it.dur = audio.duration;
+      var r = rowFor(cur);
+      if (r) r.querySelector("span").textContent = [fmt(it.dur), it.path.indexOf("/") !== -1 ? it.path.replace(/\/[^/]*$/, "") : ""].filter(Boolean).join(" · ");
+    }
+  });
+  audio.addEventListener("timeupdate", function () {
+    var r = rowFor(cur);
+    if (r && audio.duration) r.querySelector(".prog").style.width = (audio.currentTime / audio.duration * 100) + "%";
+  });
+  audio.addEventListener("ended", function () {
+    markRows();
+    if (auto.checked) step(1);
+  });
+
+  listEl.addEventListener("click", function (e) {
+    var row = e.target.closest(".row");
+    if (!row) return;
+    var i = +row.dataset.i;
+    if (e.target.closest(".keep")) toggleKeep(i);
+    else if (e.target.closest(".play")) play(i);
+  });
+
+  vol.addEventListener("input", function () { audio.volume = vol.value / 100; });
+  q.addEventListener("input", function () { render(); markRows(); });
+  function setFilter(f) {
+    filter = f;
+    $("f-all").setAttribute("aria-pressed", f === "all");
+    $("f-kept").setAttribute("aria-pressed", f === "kept");
+    render(); markRows();
+  }
+  $("f-all").addEventListener("click", function () { setFilter("all"); });
+  $("f-kept").addEventListener("click", function () { setFilter("kept"); });
+
+  $("pick").addEventListener("change", function () { addFiles(this.files); this.value = ""; });
+  var drop = $("drop");
+  ["dragenter", "dragover"].forEach(function (t) {
+    document.addEventListener(t, function (e) { e.preventDefault(); drop.classList.add("over"); });
+  });
+  ["dragleave", "drop"].forEach(function (t) {
+    document.addEventListener(t, function (e) { e.preventDefault(); if (t === "drop" || e.target === document.documentElement) drop.classList.remove("over"); });
+  });
+  document.addEventListener("drop", function (e) { if (e.dataTransfer && e.dataTransfer.files) addFiles(e.dataTransfer.files); });
+
+  document.addEventListener("keydown", function (e) {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) && e.target.type !== "checkbox" && e.target.type !== "range") return;
+    if (!items.length) return;
+    if (e.key === " ") {
+      e.preventDefault();
+      if (cur !== -1 && !audio.paused) stop();
+      else play(cur !== -1 && shown.indexOf(cur) !== -1 ? cur : shown[0]);
+    } else if (e.key === "ArrowDown") { e.preventDefault(); step(1); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); step(-1); }
+    else if (e.key === "k" || e.key === "K") { if (cur !== -1) toggleKeep(cur); }
+  });
+
+  // ---- Send kept clips into the board's own store (same IndexedDB the board reads "Your clips" from) ----
+  function openDb() {
+    return new Promise(function (res, rej) {
+      try {
+        var req = indexedDB.open("rocky-board", 1);
+        req.onupgradeneeded = function () { req.result.createObjectStore("clips", { keyPath: "id" }); };
+        req.onsuccess = function () { res(req.result); };
+        req.onerror = function () { rej(req.error); };
+      } catch (e) { rej(e); }
+    });
+  }
+
+  $("add").addEventListener("click", function () {
+    var sendStatus = $("sendStatus");
+    var kept = items.filter(function (it) { return it.kept; });
+    if (!kept.length) return;
+    sendStatus.textContent = "Adding…";
+    var db;
+    openDb().then(function (d) {
+      db = d;
+      return new Promise(function (res) {
+        var r = db.transaction("clips").objectStore("clips").getAll();
+        r.onsuccess = function () { res(r.result || []); };
+        r.onerror = function () { res([]); };
+      });
+    }).then(function (existing) {
+      var names = {};
+      existing.forEach(function (c) { names[c.name] = true; });
+      var todo = kept.filter(function (it) { return !names[it.name]; });
+      return Promise.all(todo.map(blobFor)).then(function (blobs) {
+        return new Promise(function (res, rej) {
+          var tx = db.transaction("clips", "readwrite");
+          var store = tx.objectStore("clips");
+          var base = Date.now();
+          todo.forEach(function (it, n) {
+            store.put({ id: (base + n) + "-" + Math.random().toString(36).slice(2), name: it.name, blob: blobs[n] });
+          });
+          tx.oncomplete = function () { res({ added: todo.length, skipped: kept.length - todo.length }); };
+          tx.onerror = function () { rej(tx.error); };
+        });
+      });
+    }).then(function (r) {
+      sendStatus.textContent = "Added " + r.added + " clip" + (r.added === 1 ? "" : "s") + " to the board" +
+        (r.skipped ? " (" + r.skipped + " already there)" : "") + ".";
+    }).catch(function () {
+      sendStatus.textContent = "Couldn't save to the board. This browser may be blocking site storage, for example in a private window.";
+    });
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>

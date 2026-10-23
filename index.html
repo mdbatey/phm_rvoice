@@ -1,0 +1,451 @@
+<title>Rocky Board</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600&family=Unbounded:wght@500;700&display=swap">
+<style>
+  /* Layout: one column of 560px max, a header, a two-column grid of big chord pads, a volume row. */
+  :root {
+    --bg: #e3e4e1;
+    --surface: #f2f3f0;
+    --fg: #1b2124;
+    --muted: #5d676b;
+    --rule: #c6c9c5;
+    --accent: #c4701a;
+    --on-accent: #fff8ee;
+    --font-display: "Unbounded", "Arial Black", system-ui, sans-serif;
+    --font-body: "DM Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-mono: "DM Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #13171a;
+      --surface: #1d2327;
+      --fg: #e7e9e6;
+      --muted: #8d989c;
+      --rule: #2f3a3f;
+      --accent: #f0a23c;
+      --on-accent: #1a1204;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #13171a;
+    --surface: #1d2327;
+    --fg: #e7e9e6;
+    --muted: #8d989c;
+    --rule: #2f3a3f;
+    --accent: #f0a23c;
+    --on-accent: #1a1204;
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-body);
+    font-size: 16px;
+    line-height: 1.45;
+    padding-block: 28px 40px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  .wrap { max-width: 560px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; }
+
+  header { display: flex; flex-direction: column; gap: 8px; }
+  .kicker {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  h1 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: clamp(34px, 11vw, 52px);
+    line-height: 1;
+    letter-spacing: -0.02em;
+    margin: 0;
+    text-wrap: balance;
+  }
+  .lede { margin: 0; color: var(--muted); max-width: 46ch; }
+
+  .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .pad {
+    appearance: none;
+    border: 1px solid var(--rule);
+    background: var(--surface);
+    color: var(--fg);
+    font: inherit;
+    text-align: left;
+    padding: 14px 14px 12px;
+    min-height: 124px;
+    border-radius: 6px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 14px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: background 0.12s, color 0.12s, border-color 0.12s, transform 0.08s;
+  }
+  .pad:hover { border-color: var(--accent); }
+  .pad:active { transform: scale(0.98); }
+  .pad:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .pad.playing { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+
+  .pad-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .pad-key, .pad-count {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    opacity: 0.65;
+  }
+  .pad-text {
+    font-family: var(--font-display);
+    font-weight: 500;
+    font-size: 15px;
+    line-height: 1.25;
+    letter-spacing: -0.01em;
+    overflow-wrap: anywhere;
+  }
+  .pad-bars { display: flex; gap: 4px; align-items: flex-end; height: 22px; }
+  .pad-bars i {
+    flex: 1 1 0;
+    min-width: 0;
+    height: 6px;
+    background: currentColor;
+    opacity: 0.2;
+    border-radius: 1px;
+    transition: opacity 0.08s, height 0.08s;
+  }
+  .pad-bars i.on { opacity: 1; height: 22px; }
+
+  .controls {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding-top: 6px;
+    border-top: 1px solid var(--rule);
+  }
+  .controls label { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  .mine { display: flex; flex-direction: column; gap: 12px; padding-top: 6px; border-top: 1px solid var(--rule); }
+  .mine-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .mine h2 { font-family: var(--font-display); font-weight: 500; font-size: 18px; margin: 0; }
+  .mine-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .btn {
+    font: 500 14px/1 var(--font-body);
+    padding: 10px 14px;
+    border-radius: 6px;
+    border: 1px solid var(--accent);
+    background: var(--accent);
+    color: var(--on-accent);
+    cursor: pointer;
+    text-decoration: none;
+  }
+  .btn.ghost { background: transparent; color: var(--fg); border-color: var(--rule); }
+  .btn:focus-visible, .mine-actions label:focus-within { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .controls .toggle { display: flex; align-items: center; gap: 6px; cursor: pointer; white-space: nowrap; }
+  .toggle input { accent-color: var(--accent); width: 18px; height: 18px; }
+  input[type="range"] { flex: 1 1 auto; min-width: 0; accent-color: var(--accent); height: 32px; }
+
+  .note { margin: 0; font-size: 13px; color: var(--muted); max-width: 52ch; }
+  @media (prefers-reduced-motion: reduce) {
+    .pad, .pad-bars i { transition: none; }
+  }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="kicker">Eridian chord speech</div>
+    <h1>Rocky Board</h1>
+    <p class="lede">Tap a pad to hear a phrase. Each word is one chord, the way Rocky talks.</p>
+  </header>
+
+  <main class="grid" id="grid" aria-label="Rocky phrases"></main>
+
+  <section class="mine" aria-labelledby="mine-h">
+    <div class="mine-head">
+      <h2 id="mine-h">Your clips</h2>
+      <div class="mine-actions">
+        <label class="btn" for="files">Add clips</label>
+        <input id="files" type="file" accept="audio/*" multiple hidden>
+        <a class="btn ghost" href="tester.html">Test a batch</a>
+        <button type="button" class="btn ghost" id="clear" hidden>Clear</button>
+      </div>
+    </div>
+    <p class="note" id="mine-empty">Pick audio files saved on your phone or computer, and each one becomes a pad named after its file. Have a whole zip? Use Test a batch to listen through it and send the keepers here. Clips stay in this browser only and are never added to the page itself.</p>
+    <div class="grid" id="mygrid"></div>
+  </section>
+
+  <div class="controls">
+    <label for="vol">Volume</label>
+    <input id="vol" type="range" min="0" max="100" value="70">
+    <label class="toggle" for="speak"><input id="speak" type="checkbox" checked> Voice</label>
+  </div>
+
+  <p class="note">These sounds are made from scratch in your browser as simple synthesized chords. They are an approximation of the idea, not recordings from the book or audiobook. Keys 1 to 9 and 0 also play the pads.</p>
+</div>
+
+<script>
+(function () {
+  // Chord shapes as frequency ratios over a root note.
+  var MAJ  = [1, 1.25, 1.5, 2];
+  var MAJ7 = [1, 1.25, 1.5, 1.875];
+  var MIN  = [1, 1.2, 1.5, 2];
+  var DIM  = [1, 1.189, 1.414, 1.68];
+  var SUS  = [1, 1.333, 1.5, 2];
+
+  // Each word: root (Hz), chord shape, duration (s), optional glide ratio at the end.
+  function w(root, shape, dur, glide) { return { r: root, c: shape, d: dur, g: glide || 0 }; }
+
+  var PHRASES = [
+    { text: "Amaze, amaze, amaze", gap: 0.09, words: [w(330, MAJ, 0.4), w(392, MAJ, 0.4), w(523, MAJ7, 0.85)] },
+    { text: "Fist my bump",        gap: 0.07, words: [w(262, SUS, 0.26), w(330, MAJ, 0.26), w(392, MAJ, 0.6)] },
+    { text: "Good, good, good",    gap: 0.08, words: [w(294, MAJ7, 0.3), w(294, MAJ7, 0.3), w(349, MAJ7, 0.6)] },
+    { text: "Bad, bad, bad",       gap: 0.1,  words: [w(196, DIM, 0.36), w(175, DIM, 0.36), w(147, DIM, 0.8)] },
+    { text: "Happy, happy, happy", gap: 0.05, words: [w(440, MAJ, 0.16), w(523, MAJ, 0.16), w(587, MAJ7, 0.4)] },
+    { text: "Sad, sad, sad",       gap: 0.12, words: [w(262, MIN, 0.55), w(247, MIN, 0.55), w(220, MIN, 1.0)] },
+    { text: "Question?",           gap: 0.08, words: [w(330, SUS, 0.3), w(392, SUS, 0.3), w(440, SUS, 0.7, 1.26)] },
+    { text: "Friend",              gap: 0.1,  words: [w(349, MAJ, 0.45), w(440, MAJ7, 1.0)] },
+    { text: "Understand?",         gap: 0.08, words: [w(262, MIN, 0.3), w(311, MIN, 0.3), w(392, SUS, 0.7, 1.2)] },
+    { text: "Yes, yes, yes",       gap: 0.05, words: [w(392, MAJ, 0.17), w(392, MAJ, 0.17), w(523, MAJ, 0.45)] }
+  ];
+
+  var ctx = null, master = null, bus = null, timers = [], currentPad = null;
+  var volEl = document.getElementById("vol");
+  var grid = document.getElementById("grid");
+
+  function volume() { var v = volEl.value / 100; return v * v * 0.9; }
+
+  function ensure() {
+    if (!ctx) {
+      var AC = window.AudioContext || window.webkitAudioContext;
+      ctx = new AC();
+      master = ctx.createGain();
+      master.gain.value = volume();
+      var comp = ctx.createDynamicsCompressor();
+      master.connect(comp);
+      comp.connect(ctx.destination);
+    }
+    if (ctx.state === "suspended") ctx.resume();
+  }
+
+  volEl.addEventListener("input", function () {
+    if (master) master.gain.setTargetAtTime(volume(), ctx.currentTime, 0.02);
+  });
+
+  function voice(out, freq, t0, dur, glide, peak) {
+    var o1 = ctx.createOscillator(), o2 = ctx.createOscillator();
+    o1.type = "triangle"; o2.type = "sine";
+    o2.detune.value = 6;
+    var lfo = ctx.createOscillator(), lg = ctx.createGain();
+    lfo.frequency.value = 5.2 + Math.random() * 0.8;
+    lg.gain.value = freq * 0.007;
+    lfo.connect(lg); lg.connect(o1.frequency); lg.connect(o2.frequency);
+
+    [o1, o2].forEach(function (o) {
+      o.frequency.setValueAtTime(freq, t0);
+      if (glide) o.frequency.exponentialRampToValueAtTime(freq * glide, t0 + dur * 0.92);
+    });
+
+    var lp = ctx.createBiquadFilter();
+    lp.type = "lowpass"; lp.frequency.value = 2400; lp.Q.value = 0.7;
+
+    var g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.linearRampToValueAtTime(peak, t0 + 0.035);
+    g.gain.linearRampToValueAtTime(peak * 0.72, t0 + dur * 0.65);
+    g.gain.linearRampToValueAtTime(0.0001, t0 + dur);
+
+    o1.connect(lp); o2.connect(lp); lp.connect(g); g.connect(out);
+    var end = t0 + dur + 0.06;
+    o1.start(t0); o2.start(t0); lfo.start(t0);
+    o1.stop(end); o2.stop(end); lfo.stop(end);
+  }
+
+  var speakEl = document.getElementById("speak");
+  var canSpeak = "speechSynthesis" in window;
+  if (!canSpeak) speakEl.parentNode.hidden = true;
+
+  function say(text) {
+    if (!canSpeak || !speakEl.checked || !text) return;
+    var u = new SpeechSynthesisUtterance(text);
+    u.pitch = 0.1;
+    u.rate = 1.15;
+    u.volume = Math.min(1, volume() + 0.2);
+    var voices = window.speechSynthesis.getVoices();
+    var en = voices.filter(function (v) { return /^en/i.test(v.lang); })[0];
+    if (en) u.voice = en;
+    window.speechSynthesis.speak(u);
+  }
+
+  function stopCurrent() {
+    if (canSpeak) window.speechSynthesis.cancel();
+    timers.forEach(clearTimeout); timers = [];
+    if (bus) {
+      var old = bus; bus = null;
+      old.gain.cancelScheduledValues(ctx.currentTime);
+      old.gain.setTargetAtTime(0.0001, ctx.currentTime, 0.02);
+      setTimeout(function () { try { old.disconnect(); } catch (e) {} }, 400);
+    }
+    if (currentPad) {
+      currentPad.classList.remove("playing");
+      currentPad.querySelectorAll("i").forEach(function (b) { b.classList.remove("on"); });
+      currentPad = null;
+    }
+  }
+
+  function play(index, pad) {
+    ensure();
+    stopCurrent();
+    var p = PHRASES[index];
+    bus = ctx.createGain();
+    bus.gain.value = 1;
+    bus.connect(master);
+    currentPad = pad;
+    pad.classList.add("playing");
+    var bars = pad.querySelectorAll("i");
+
+    var t = ctx.currentTime + 0.03;
+    var base = t;
+    var spoken = p.text.replace(/,/g, "").split(/\s+/);
+    var offset = p.words.length - spoken.length;
+    p.words.forEach(function (word, i) {
+      var sw = spoken[i - offset];
+      if (sw) timers.push(setTimeout(function () { say(sw); }, (t - base) * 1000));
+      var peak = 0.34 / word.c.length;
+      word.c.forEach(function (ratio) {
+        voice(bus, word.r * ratio, t, word.d, word.g, peak);
+      });
+      var onAt = (t - base) * 1000, offAt = (t - base + word.d) * 1000;
+      timers.push(setTimeout(function () { bars[i].classList.add("on"); }, onAt));
+      timers.push(setTimeout(function () { bars[i].classList.remove("on"); }, offAt));
+      t += word.d + p.gap;
+    });
+    var total = (t - base) * 1000;
+    timers.push(setTimeout(function () {
+      pad.classList.remove("playing");
+      if (currentPad === pad) currentPad = null;
+    }, total));
+  }
+
+  PHRASES.forEach(function (p, i) {
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "pad";
+    b.setAttribute("aria-label", "Play: " + p.text);
+    var keyLabel = i === 9 ? "0" : String(i + 1);
+    var bars = p.words.map(function () { return "<i></i>"; }).join("");
+    b.innerHTML =
+      '<span class="pad-top"><span class="pad-key">' + keyLabel + '</span><span class="pad-count">' +
+      p.words.length + ' chords</span></span>' +
+      '<span class="pad-text"></span>' +
+      '<span class="pad-bars" aria-hidden="true">' + bars + '</span>';
+    b.querySelector(".pad-text").textContent = p.text;
+    b.addEventListener("click", function () { play(i, b); });
+    grid.appendChild(b);
+  });
+
+  // ---- User's own clips: kept in this browser's IndexedDB, never published ----
+  var mygrid = document.getElementById("mygrid");
+  var filesEl = document.getElementById("files");
+  var clearEl = document.getElementById("clear");
+  var emptyEl = document.getElementById("mine-empty");
+  var clipAudio = null, clipPad = null, db = null;
+
+  function openDb() {
+    return new Promise(function (res) {
+      try {
+        var req = indexedDB.open("rocky-board", 1);
+        req.onupgradeneeded = function () { req.result.createObjectStore("clips", { keyPath: "id" }); };
+        req.onsuccess = function () { db = req.result; res(db); };
+        req.onerror = function () { res(null); };
+      } catch (e) { res(null); }
+    });
+  }
+  function allClips() {
+    return new Promise(function (res) {
+      if (!db) return res([]);
+      try {
+        var r = db.transaction("clips").objectStore("clips").getAll();
+        r.onsuccess = function () { res(r.result || []); };
+        r.onerror = function () { res([]); };
+      } catch (e) { res([]); }
+    });
+  }
+  function putClip(c) {
+    try { if (db) db.transaction("clips", "readwrite").objectStore("clips").put(c); } catch (e) {}
+  }
+  function clearClips() {
+    try { if (db) db.transaction("clips", "readwrite").objectStore("clips").clear(); } catch (e) {}
+  }
+
+  function prettyName(n) {
+    return n.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
+  }
+
+  function stopClip() {
+    if (clipAudio) { clipAudio.pause(); clipAudio = null; }
+    if (clipPad) { clipPad.classList.remove("playing"); clipPad = null; }
+  }
+
+  function addPad(clip) {
+    var url = URL.createObjectURL(clip.blob);
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "pad";
+    b.innerHTML = '<span class="pad-top"><span class="pad-key">clip</span><span class="pad-count"></span></span><span class="pad-text"></span><span class="pad-bars" aria-hidden="true"><i></i><i></i><i></i></span>';
+    b.querySelector(".pad-text").textContent = clip.name;
+    b.setAttribute("aria-label", "Play clip: " + clip.name);
+    b.addEventListener("click", function () {
+      stopCurrent();
+      if (canSpeak) window.speechSynthesis.cancel();
+      stopClip();
+      var a = new Audio(url);
+      a.volume = Math.min(1, volEl.value / 100);
+      clipAudio = a; clipPad = b;
+      b.classList.add("playing");
+      a.onended = function () { if (clipPad === b) stopClip(); };
+      a.play().catch(function () { stopClip(); });
+    });
+    mygrid.appendChild(b);
+    emptyEl.hidden = true;
+    clearEl.hidden = false;
+  }
+
+  filesEl.addEventListener("change", function () {
+    Array.prototype.forEach.call(filesEl.files, function (f) {
+      var clip = { id: Date.now() + "-" + Math.random().toString(36).slice(2), name: prettyName(f.name), blob: f };
+      putClip(clip);
+      addPad(clip);
+    });
+    filesEl.value = "";
+  });
+
+  clearEl.addEventListener("click", function () {
+    stopClip();
+    clearClips();
+    mygrid.innerHTML = "";
+    emptyEl.hidden = false;
+    clearEl.hidden = true;
+  });
+
+  openDb().then(allClips).then(function (list) {
+    list.sort(function (a, b) { return a.id < b.id ? -1 : 1; }).forEach(addPad);
+  });
+
+  document.addEventListener("keydown", function (e) {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.target && e.target.tagName === "INPUT") return;
+    var k = e.key;
+    if (k >= "0" && k <= "9") {
+      var idx = k === "0" ? 9 : parseInt(k, 10) - 1;
+      var pads = grid.querySelectorAll(".pad");
+      if (pads[idx]) play(idx, pads[idx]);
+    }
+  });
+})();
+</script>
